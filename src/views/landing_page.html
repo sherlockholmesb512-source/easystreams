@@ -1,0 +1,832 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{{manifestName}} - Stremio Addon</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --netflix-red: #E50914;
+            --netflix-red-dark: #B20710;
+            --netflix-red-glow: rgba(229, 9, 20, 0.55);
+            --bg: #0a0a0a;
+            --bg-elevated: #141414;
+            --bg-card: #181818;
+            --bg-card-hover: #1f1f1f;
+            --border: #2a2a2a;
+            --border-strong: #3a3a3a;
+            --text: #ffffff;
+            --text-secondary: #b3b3b3;
+            --text-muted: #6b6b6b;
+            --radius: 12px;
+            --radius-lg: 16px;
+            --ease: cubic-bezier(0.4, 0, 0.2, 1);
+        }
+
+        * { box-sizing: border-box; }
+
+        html, body {
+            margin: 0;
+            padding: 0;
+            background: var(--bg);
+            color: var(--text);
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+            -webkit-font-smoothing: antialiased;
+            min-height: 100vh;
+        }
+
+        body {
+            background:
+                radial-gradient(ellipse 80% 50% at 50% -10%, rgba(229, 9, 20, 0.18) 0%, transparent 60%),
+                radial-gradient(ellipse 60% 40% at 80% 20%, rgba(139, 92, 246, 0.08) 0%, transparent 70%),
+                var(--bg);
+            background-attachment: fixed;
+        }
+
+        .bg-grain {
+            position: fixed;
+            inset: 0;
+            pointer-events: none;
+            opacity: 0.04;
+            z-index: 0;
+            background-image: url('data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/svg" width="200" height="200"%3E%3Cfilter id="n"%3E%3CfeTurbulence type="fractalNoise" baseFrequency="0.9" numOctaves="3"/%3E%3C/filter%3E%3Crect width="100%25" height="100%25" filter="url(%23n)"/%3E%3C/svg%3E');
+        }
+
+        .navbar {
+            position: sticky;
+            top: 0;
+            z-index: 50;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 18px 40px;
+            background: linear-gradient(180deg, rgba(10, 10, 10, 0.95) 0%, rgba(10, 10, 10, 0.7) 100%);
+            backdrop-filter: blur(12px);
+            -webkit-backdrop-filter: blur(12px);
+            border-bottom: 1px solid var(--border);
+        }
+
+        .logo {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            font-weight: 900;
+            font-size: 22px;
+            letter-spacing: -0.02em;
+            color: var(--text);
+            text-decoration: none;
+        }
+
+        .logo-mark {
+            width: 36px;
+            height: 36px;
+            border-radius: 8px;
+            background: linear-gradient(135deg, var(--netflix-red) 0%, var(--netflix-red-dark) 100%);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            box-shadow: 0 4px 20px var(--netflix-red-glow);
+        }
+
+        .logo-mark svg {
+            width: 20px;
+            height: 20px;
+            color: #fff;
+        }
+
+        .main {
+            position: relative;
+            z-index: 1;
+            max-width: 1100px;
+            margin: 0 auto;
+            padding: 48px 40px 80px;
+        }
+
+        .hero {
+            text-align: center;
+            margin-bottom: 56px;
+        }
+
+        .hero-eyebrow {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            font-size: 12px;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.18em;
+            color: var(--netflix-red);
+            margin-bottom: 20px;
+        }
+
+        .hero-eyebrow::before,
+        .hero-eyebrow::after {
+            content: '';
+            width: 32px;
+            height: 1px;
+            background: linear-gradient(90deg, transparent, var(--netflix-red), transparent);
+        }
+
+        .hero h1 {
+            margin: 0 0 16px;
+            font-size: clamp(40px, 7vw, 72px);
+            font-weight: 900;
+            letter-spacing: -0.03em;
+            line-height: 1.02;
+            background: linear-gradient(180deg, #ffffff 0%, #b3b3b3 100%);
+            -webkit-background-clip: text;
+            background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+
+        .hero p {
+            margin: 0 auto;
+            max-width: 560px;
+            font-size: 17px;
+            line-height: 1.6;
+            color: var(--text-secondary);
+        }
+
+        .section {
+            margin-bottom: 40px;
+        }
+
+        .section-head {
+            display: flex;
+            align-items: baseline;
+            justify-content: space-between;
+            margin-bottom: 20px;
+            gap: 16px;
+        }
+
+        .section-title {
+            font-size: 22px;
+            font-weight: 800;
+            letter-spacing: -0.01em;
+            margin: 0;
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+
+        .section-title::before {
+            content: '';
+            width: 4px;
+            height: 22px;
+            background: var(--netflix-red);
+            border-radius: 2px;
+            box-shadow: 0 0 12px var(--netflix-red-glow);
+        }
+
+        .section-subtitle {
+            font-size: 13px;
+            color: var(--text-muted);
+            font-weight: 500;
+        }
+
+        .providers-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+            gap: 14px;
+        }
+
+        .provider-card {
+            position: relative;
+            display: block;
+            cursor: pointer;
+            user-select: none;
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            border-radius: var(--radius);
+            padding: 18px;
+            overflow: hidden;
+            transition: transform 0.25s var(--ease), border-color 0.25s var(--ease), opacity 0.25s var(--ease);
+            isolation: isolate;
+        }
+
+        .provider-card-inner {
+            display: flex;
+            flex-wrap: wrap;
+            align-items: center;
+            gap: 14px;
+        }
+
+        .provider-icon {
+            flex-shrink: 0;
+            width: 44px;
+            height: 44px;
+            border-radius: 10px;
+            background: color-mix(in srgb, var(--accent) 18%, transparent);
+            color: var(--accent);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: background 0.25s var(--ease), color 0.25s var(--ease), box-shadow 0.3s var(--ease);
+        }
+
+        .provider-icon svg {
+            width: 22px;
+            height: 22px;
+        }
+
+        .provider-info {
+            flex: 1;
+            min-width: 0;
+            display: flex;
+            flex-direction: column;
+            gap: 2px;
+        }
+
+        .provider-name {
+            font-size: 15px;
+            font-weight: 700;
+            color: var(--text);
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+        .provider-category {
+            font-size: 11px;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.08em;
+            color: var(--text-muted);
+        }
+
+        .provider-card input.provider-checkbox {
+            position: absolute;
+            opacity: 0;
+            pointer-events: none;
+            width: 0;
+            height: 0;
+        }
+
+        .provider-card:has(input:checked) {
+            border-color: color-mix(in srgb, var(--accent) 45%, transparent);
+        }
+
+        .provider-card:has(input:checked) .provider-icon {
+            background: color-mix(in srgb, var(--accent) 28%, transparent);
+            box-shadow: 0 0 18px -2px var(--accent), 0 0 6px var(--accent);
+        }
+
+        .provider-card:has(input:not(:checked)) {
+            opacity: 0.42;
+            filter: grayscale(0.85);
+        }
+
+        .provider-card:has(input:not(:checked)) .provider-icon {
+            box-shadow: none;
+        }
+
+        .provider-card:hover:has(input:checked) {
+            transform: translateY(-3px);
+        }
+
+        .provider-card:hover:has(input:not(:checked)) {
+            opacity: 0.7;
+            filter: grayscale(0.5);
+            transform: translateY(-2px);
+            border-color: var(--border-strong);
+        }
+
+        .provider-card:focus-within {
+            outline: 2px solid var(--netflix-red);
+            outline-offset: 2px;
+        }
+
+        .provider-proxy-warning {
+            display: none;
+            position: absolute;
+            inset: 0;
+            align-items: flex-end;
+            justify-content: center;
+            padding: 10px;
+            background: linear-gradient(180deg, transparent 20%, rgba(24, 24, 24, 0.96) 58%);
+            color: #fbbf24;
+            font-size: 11px;
+            font-weight: 600;
+            line-height: 1.2;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            text-align: center;
+        }
+
+        .provider-card.proxy-missing .provider-proxy-warning {
+            display: flex;
+        }
+
+        .provider-card.proxy-missing {
+            cursor: not-allowed;
+            opacity: 0.55;
+        }
+
+        @media (prefers-reduced-motion: reduce) {
+            .provider-card, .provider-icon {
+                transition: none;
+            }
+            .provider-card:hover { transform: none; }
+        }
+
+        .panel {
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            border-radius: var(--radius-lg);
+            padding: 22px 24px;
+        }
+
+        .panel + .panel { margin-top: 14px; }
+
+        .panel-title {
+            font-size: 12px;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 0.14em;
+            color: var(--text-secondary);
+            margin: 0 0 16px;
+        }
+
+        .toggle-row {
+            display: flex;
+            align-items: flex-start;
+            gap: 14px;
+            padding: 12px 0;
+            border-top: 1px solid var(--border);
+            cursor: pointer;
+        }
+
+        .toggle-row:first-of-type { border-top: 0; padding-top: 0; }
+        .toggle-row:last-of-type { padding-bottom: 0; }
+
+        .toggle-row input[type="checkbox"] {
+            flex-shrink: 0;
+            appearance: none;
+            -webkit-appearance: none;
+            width: 42px;
+            height: 24px;
+            border-radius: 999px;
+            background: #333;
+            border: 1px solid var(--border-strong);
+            position: relative;
+            cursor: pointer;
+            margin: 2px 0 0;
+            transition: background 0.2s var(--ease), border-color 0.2s var(--ease);
+        }
+
+        .toggle-row input[type="checkbox"]::after {
+            content: '';
+            position: absolute;
+            top: 2px;
+            left: 2px;
+            width: 18px;
+            height: 18px;
+            border-radius: 50%;
+            background: #fff;
+            transition: transform 0.2s var(--ease);
+        }
+
+        .toggle-row input[type="checkbox"]:checked {
+            background: var(--netflix-red);
+            border-color: var(--netflix-red);
+            box-shadow: 0 0 14px var(--netflix-red-glow);
+        }
+
+        .toggle-row input[type="checkbox"]:checked::after {
+            transform: translateX(18px);
+        }
+
+        .toggle-row .toggle-body strong {
+            display: block;
+            font-size: 14px;
+            font-weight: 700;
+            margin-bottom: 4px;
+        }
+
+        .toggle-row .toggle-body span {
+            display: block;
+            font-size: 13px;
+            color: var(--text-secondary);
+            line-height: 1.5;
+        }
+
+        .input {
+            width: 100%;
+            padding: 11px 14px;
+            border-radius: 10px;
+            border: 1px solid var(--border-strong);
+            background: #0f0f0f;
+            color: var(--text);
+            font-size: 14px;
+            font-family: inherit;
+            transition: border-color 0.2s var(--ease), box-shadow 0.2s var(--ease);
+        }
+
+        .input::placeholder { color: var(--text-muted); }
+        .input:focus {
+            outline: none;
+            border-color: var(--netflix-red);
+            box-shadow: 0 0 0 3px rgba(229, 9, 20, 0.15);
+        }
+
+        select.input { cursor: pointer; }
+
+        .proxy-list {
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+            margin-bottom: 10px;
+        }
+
+        .proxy-row {
+            display: grid;
+            grid-template-columns: minmax(0, 1.3fr) minmax(0, 1fr) auto;
+            gap: 8px;
+        }
+
+        .proxy-row .input { width: 100%; }
+
+        .proxy-remove, .proxy-add {
+            border-radius: 10px;
+            border: 1px solid var(--border-strong);
+            background: #0f0f0f;
+            color: var(--text);
+            font-size: 16px;
+            font-weight: 700;
+            cursor: pointer;
+            transition: border-color 0.2s var(--ease), background 0.2s var(--ease);
+        }
+
+        .proxy-remove { width: 42px; height: 42px; }
+
+        .proxy-add {
+            width: 100%;
+            padding: 11px 14px;
+            font-size: 13px;
+            font-weight: 600;
+            margin-top: 4px;
+        }
+
+        .proxy-remove:hover, .proxy-add:hover {
+            border-color: var(--netflix-red);
+            background: rgba(229, 9, 20, 0.08);
+        }
+
+        @media (max-width: 560px) {
+            .proxy-row { grid-template-columns: 1fr; }
+            .proxy-remove { width: 100%; }
+        }
+
+        .cta-wrap {
+            margin-top: 48px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 14px;
+        }
+
+        .install-btn {
+            display: inline-flex;
+            align-items: center;
+            gap: 10px;
+            background: linear-gradient(135deg, var(--netflix-red) 0%, var(--netflix-red-dark) 100%);
+            color: #fff;
+            border: none;
+            padding: 18px 56px;
+            font-size: 17px;
+            font-weight: 800;
+            letter-spacing: 0.02em;
+            border-radius: 999px;
+            cursor: pointer;
+            text-decoration: none;
+            box-shadow: 0 8px 30px var(--netflix-red-glow), inset 0 1px 0 rgba(255, 255, 255, 0.2);
+            transition: transform 0.2s var(--ease), box-shadow 0.2s var(--ease);
+        }
+
+        .install-btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 12px 40px var(--netflix-red-glow), inset 0 1px 0 rgba(255, 255, 255, 0.25);
+        }
+
+        .install-btn:active { transform: translateY(0); }
+
+        .install-btn svg {
+            width: 20px;
+            height: 20px;
+        }
+
+        .copy-btn {
+            background: transparent;
+            color: var(--text-secondary);
+            border: 1px solid var(--border-strong);
+            padding: 10px 22px;
+            font-size: 13px;
+            font-weight: 600;
+            border-radius: 999px;
+            cursor: pointer;
+            transition: all 0.2s var(--ease);
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .copy-btn:hover {
+            border-color: var(--text);
+            color: var(--text);
+            background: rgba(255, 255, 255, 0.04);
+        }
+
+        .copy-btn svg {
+            width: 15px;
+            height: 15px;
+        }
+
+        .footer {
+            text-align: center;
+            padding: 32px 20px 40px;
+            color: var(--text-muted);
+            font-size: 13px;
+            position: relative;
+            z-index: 1;
+        }
+
+        .footer a {
+            color: var(--text-secondary);
+            text-decoration: none;
+            transition: color 0.2s var(--ease);
+        }
+
+        .footer a:hover { color: var(--netflix-red); }
+
+        @media (max-width: 768px) {
+            .navbar { padding: 14px 20px; }
+            .main { padding: 32px 20px 60px; }
+            .hero { margin-bottom: 40px; }
+            .providers-grid { grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); gap: 10px; }
+            .panel { padding: 18px; }
+        }
+
+        @media (max-width: 420px) {
+            .providers-grid { grid-template-columns: 1fr; }
+        }
+    </style>
+</head>
+<body>
+    <div class="bg-grain" aria-hidden="true"></div>
+
+    <nav class="navbar">
+        <a class="logo" href="/">
+            <span class="logo-mark" aria-hidden="true">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+            </span>
+            <span>{{manifestName}}</span>
+        </a>
+        <div class="navbar-meta"></div>
+    </nav>
+
+    <main class="main">
+        <section class="hero">
+            <span class="hero-eyebrow">Stremio Addon</span>
+            <h1>{{manifestName}}</h1>
+            <p>{{manifestDescription}}</p>
+        </section>
+
+        <section class="section">
+            <div class="section-head">
+                <h2 class="section-title">Providers</h2>
+                <span class="section-subtitle">Clicca una card per attivare o disattivare</span>
+            </div>
+            <div class="providers-grid">
+                {{providerCardsHtml}}
+            </div>
+        </section>
+
+        <section class="section">
+            <div class="section-head">
+                <h2 class="section-title">EasyProxy</h2>
+                <span class="section-subtitle">Proxy HLS per provider bloccati</span>
+            </div>
+            <div class="panel">
+                <div class="proxy-list" id="easyProxyList"></div>
+                <button id="addEasyProxy" type="button" class="proxy-add">+ Aggiungi EasyProxy</button>
+                <div style="margin-top:18px;">
+                    <label for="easyProxyMode" style="display:block;font-size:13px;font-weight:600;color:var(--text-secondary);margin-bottom:6px;">Modalit&agrave;</label>
+                    <select class="input" id="easyProxyMode" name="easyProxyMode">
+                        <option value="failover">Failover (usa il primo sano)</option>
+                        <option value="load-balance">Load balance (alterna)</option>
+                    </select>
+                </div>
+            </div>
+        </section>
+
+        <section class="section">
+            <div class="section-head">
+                <h2 class="section-title">Opzioni</h2>
+                <span class="section-subtitle">Compatibilit&agrave; e cataloghi</span>
+            </div>
+            <div class="panel">
+                <label class="toggle-row" for="easyCatalogsLangIt" style="display: none !important;">
+                    <input type="checkbox" id="easyCatalogsLangIt" name="easyCatalogsLangIt" checked>
+                    <span class="toggle-body">
+                        <strong>EasyCatalogs mode</strong>
+                        <span>Aggiunge mapping italiano per installazioni EasyCatalogs.</span>
+                    </span>
+                </label>
+                <label class="toggle-row" for="aiostreamsMode">
+                    <input type="checkbox" id="aiostreamsMode" name="aiostreamsMode">
+                    <span class="toggle-body">
+                        <strong>AIOStreams Mode</strong>
+                        <span>Formatta titoli e nomi stream per il parsing regex di AIOStreams.</span>
+                    </span>
+                </label>
+            </div>
+        </section>
+
+        <div class="cta-wrap">
+            <a id="installLink" href="#" class="install-btn">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 3 19 12 5 21 5 3"/></svg>
+                INSTALLA SU STREMIO
+            </a>
+            <button id="copyLink" type="button" class="copy-btn">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect width="14" height="14" x="8" y="8" rx="2" ry="2"/><path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2"/></svg>
+                Copia link manifest
+            </button>
+        </div>
+    </main>
+
+    <footer class="footer">
+        Powered by <a href="https://github.com/realbestia1/" target="_blank" rel="noopener">realbestia</a>
+    </footer>
+
+    <script id="initialConfig" type="application/json">{{initialConfigJson}}</script>
+    <script>
+        const currentHost = window.location.host;
+        const protocol = window.location.protocol;
+        const installBtn = document.getElementById('installLink');
+        const copyBtn = document.getElementById('copyLink');
+        const easyCatalogsToggle = document.getElementById('easyCatalogsLangIt');
+        const aiostreamsModeToggle = document.getElementById('aiostreamsMode');
+        const easyProxyList = document.getElementById('easyProxyList');
+        const addEasyProxyBtn = document.getElementById('addEasyProxy');
+        const easyProxyModeInput = document.getElementById('easyProxyMode');
+        const providerCheckboxes = Array.from(document.querySelectorAll('.provider-checkbox'));
+        let manifestUrl = '';
+        let stremioUrl = '';
+
+        function readInitialConfig() {
+            const node = document.getElementById('initialConfig');
+            if (!node) return {};
+            try { return JSON.parse(node.textContent || '{}'); } catch { return {}; }
+        }
+
+        const initialConfig = readInitialConfig();
+
+        function createEasyProxyRow(values = {}) {
+            const row = document.createElement('div');
+            row.className = 'proxy-row';
+            row.innerHTML = `
+                <input class="input proxy-url" type="url" placeholder="https://proxy.example.com" value="${String(values.url || '').replace(/"/g, '&quot;')}">
+                <input class="input proxy-password" type="text" placeholder="api password (opzionale)" value="${String(values.password || '').replace(/"/g, '&quot;')}">
+                <button class="proxy-remove" type="button" title="Rimuovi" aria-label="Rimuovi EasyProxy">&minus;</button>
+            `;
+            row.querySelectorAll('input').forEach((input) => input.addEventListener('input', updateInstallLinks));
+            row.querySelector('.proxy-remove').addEventListener('click', () => {
+                row.remove();
+                if (easyProxyList && easyProxyList.children.length === 0) createEasyProxyRow();
+                updateInstallLinks();
+            });
+            easyProxyList.appendChild(row);
+        }
+
+        function getEasyProxyEntries() {
+            if (!easyProxyList) return [];
+            return Array.from(easyProxyList.querySelectorAll('.proxy-row'))
+                .map((row) => {
+                    let url = row.querySelector('.proxy-url')?.value.trim() || '';
+                    while (url.endsWith('/')) url = url.slice(0, -1);
+                    const password = row.querySelector('.proxy-password')?.value.trim() || '';
+                    return { url, password };
+                })
+                .filter((entry) => entry.url);
+        }
+
+        let proxyStateInitialized = false;
+        let previousHasProxy = false;
+        function syncProxyRequiredProviders() {
+            const hasProxy = getEasyProxyEntries().length > 0;
+            providerCheckboxes.forEach((input) => {
+                const card = input.closest('.provider-card');
+                if (!card || card.dataset.requiresProxy !== 'true') return;
+                input.disabled = false;
+                card.classList.toggle('proxy-missing', !hasProxy);
+                if (hasProxy && proxyStateInitialized && !previousHasProxy) input.checked = true;
+            });
+            previousHasProxy = hasProxy;
+            proxyStateInitialized = true;
+        }
+
+        function normalizeInitialEasyProxyEntries(config) {
+            if (Array.isArray(config.easyProxies)) {
+                return config.easyProxies
+                    .map((entry) => ({ url: String(entry?.url || '').trim(), password: String(entry?.password || '').trim() }))
+                    .filter((entry) => entry.url);
+            }
+            const fallbackPassword = String(config.easyProxyPassword || '').trim();
+            return String(config.easyProxyUrls || config.easyProxyUrl || '')
+                .split(/[\s,]+/)
+                .map((url) => ({ url: url.trim(), password: fallbackPassword }))
+                .filter((entry) => entry.url);
+        }
+
+        function applyInitialConfig(config) {
+            if (easyCatalogsToggle) {
+                easyCatalogsToggle.checked = ['1','true','yes','on','enabled','checked'].includes(String(config.easyCatalogsLangIt || '').toLowerCase()) || config.easyCatalogsLangIt === true;
+            }
+            if (aiostreamsModeToggle) {
+                aiostreamsModeToggle.checked = ['1','true','yes','on','enabled','checked'].includes(String(config.aiostreamsMode || '').toLowerCase()) || config.aiostreamsMode === true;
+            }
+            if (easyProxyModeInput && config.easyProxyMode) easyProxyModeInput.value = String(config.easyProxyMode);
+
+            const proxyEntries = normalizeInitialEasyProxyEntries(config);
+            if (easyProxyList) {
+                easyProxyList.innerHTML = '';
+                if (proxyEntries.length > 0) proxyEntries.forEach((entry) => createEasyProxyRow(entry));
+                else createEasyProxyRow();
+            }
+
+            const disabledProviderConfig = Object.prototype.hasOwnProperty.call(config || {}, 'disabledProviders') ? config.disabledProviders : '';
+            const disabledProviders = new Set(String(disabledProviderConfig || '').split(',').map((n) => n.trim().toLowerCase()).filter(Boolean));
+            providerCheckboxes.forEach((input) => {
+                input.checked = !disabledProviders.has(String(input.value || '').toLowerCase());
+            });
+            syncProxyRequiredProviders();
+        }
+
+        function getConfigPath() {
+            const config = {};
+            if (easyCatalogsToggle && easyCatalogsToggle.checked) config.easyCatalogsLangIt = 'on';
+            if (aiostreamsModeToggle && aiostreamsModeToggle.checked) config.aiostreamsMode = 'on';
+            const easyProxyEntries = getEasyProxyEntries();
+            if (easyProxyEntries.length > 0) config.easyProxies = easyProxyEntries;
+            if (easyProxyModeInput && easyProxyModeInput.value && easyProxyModeInput.value !== 'failover') config.easyProxyMode = easyProxyModeInput.value;
+            const disabledProviders = providerCheckboxes.filter((i) => !i.checked).map((i) => i.value);
+            const token = disabledProviders.join(',');
+            if (token !== '') config.disabledProviders = token;
+            if (Object.keys(config).length === 0) return '';
+            return '/' + encodeURIComponent(JSON.stringify(config));
+        }
+
+        function updateInstallLinks() {
+            syncProxyRequiredProviders();
+            const configPath = getConfigPath();
+            manifestUrl = `${protocol}//${currentHost}${configPath}/manifest.json`;
+            stremioUrl = `stremio://${currentHost}${configPath}/manifest.json`;
+            installBtn.href = stremioUrl;
+        }
+
+        if (easyCatalogsToggle) easyCatalogsToggle.addEventListener('change', updateInstallLinks);
+        if (aiostreamsModeToggle) aiostreamsModeToggle.addEventListener('change', updateInstallLinks);
+        if (addEasyProxyBtn) addEasyProxyBtn.addEventListener('click', () => { createEasyProxyRow(); updateInstallLinks(); });
+        if (easyProxyModeInput) easyProxyModeInput.addEventListener('change', updateInstallLinks);
+        providerCheckboxes.forEach((input) => input.addEventListener('change', updateInstallLinks));
+
+        applyInitialConfig(initialConfig);
+        updateInstallLinks();
+
+        copyBtn.addEventListener('click', async () => {
+            try {
+                const showSuccess = () => {
+                    const original = copyBtn.innerHTML;
+                    copyBtn.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="20 6 9 17 4 12"/></svg> Copiato!';
+                    copyBtn.style.borderColor = '#22C55E';
+                    copyBtn.style.color = '#22C55E';
+                    setTimeout(() => { copyBtn.innerHTML = original; copyBtn.style.borderColor = ''; copyBtn.style.color = ''; }, 2000);
+                };
+                if (navigator.clipboard && window.isSecureContext) {
+                    await navigator.clipboard.writeText(manifestUrl);
+                } else {
+                    const ta = document.createElement('textarea');
+                    ta.value = manifestUrl;
+                    ta.setAttribute('readonly', '');
+                    ta.style.position = 'fixed';
+                    ta.style.top = '-9999px';
+                    document.body.appendChild(ta);
+                    ta.focus(); ta.select();
+                    const ok = document.execCommand('copy');
+                    document.body.removeChild(ta);
+                    if (!ok) throw new Error('Fallback copy failed');
+                }
+                showSuccess();
+            } catch (err) {
+                console.error('Copy failed:', err);
+            }
+        });
+
+        console.log('Manifest URL:', manifestUrl);
+    </script>
+</body>
+</html>
