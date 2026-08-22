@@ -1655,7 +1655,7 @@ function getProviderExecutionOrder(type, providerId, requestContext, animeRoutin
 
 const builder = new addonBuilder({
     id: 'org.bestia.easystreams',
-    version: '1.3.48',
+    version: '1.3.49',
     name: 'Easy Streams',
     description: 'Italian Streams providers',
     catalogs: [
@@ -2019,17 +2019,56 @@ async function getAnimeFillerTagForEpisode(type, requestContext, season, episode
     if (match) {
         const lowerType = match.type.toLowerCase();
         if (lowerType.includes("mixed")) {
-            return "?? MIXED CANON";
+            return "⚠️ MIXED CANON";
         } else if (lowerType.includes("filler")) {
-            return "? FILLER";
+            return "🌀 FILLER";
         } else if (lowerType === "anime canon") {
-            return "?? ANIME CANON";
+            return "🔵 ANIME CANON";
         } else if (lowerType === "manga canon" || lowerType.includes("canon")) {
-            return "? MANGA CANON";
+            return "📖 MANGA CANON";
         }
     }
 
     return "";
+}
+
+function buildStreamTechTags(parts) {
+    const text = parts
+        .map((p) => String(p || '').toLowerCase())
+        .join(' ');
+    if (!text.trim()) return [];
+    const tags = [];
+    const pushIf = (pattern, label) => {
+        try {
+            if (new RegExp(pattern, 'i').test(text)) tags.push(label);
+        } catch {}
+    };
+    pushIf('\\b2160p\\b|\\b4k\\b|\\buhd\\b', '4K·2160p');
+    pushIf('\\b1080p\\b|\\bfhd\\b|full\\s*hd|fullhd', '1080p');
+    pushIf('\\b720p\\b', '720p');
+    pushIf('\\b480p\\b', '480p');
+    pushIf('\\bremux\\b', 'REMUX');
+    pushIf('blu[\\s._-]?ray|\\bbdrip\\b|\\bbdremux\\b', 'BluRay');
+    pushIf('web[\\s._-]?dl\\b|\\bwebdl\\b', 'WEB-DL');
+    pushIf('web[\\s._-]?rip\\b|\\bwebrip\\b', 'WEBRip');
+    pushIf('\\bhdtv\\b', 'HDTV');
+    pushIf('dvd[\\s._-]?rip\\b|\\bdvd\\b', 'DVDRip');
+    pushIf('\\bhevc\\b|h[\\s._-]?265\\b|x265\\b', 'H265·HEVC');
+    pushIf('\\bavc\\b|h[\\s._-]?264\\b|x264\\b', 'H264·AVC');
+    pushIf('atmos', 'ATMOS');
+    pushIf('dolby[\\s]*vision|\\bdovi\\b', 'DolbyVision');
+    pushIf('hdr10\\s*\\+', 'HDR10+');
+    pushIf('\\bhdr10\\b(?!\\s*\\+)|\\bhdr\\s*10\\b(?!\\+)', 'HDR10');
+    pushIf('\\bhdr\\b(?!1?0)', 'HDR');
+    pushIf('\\be[-\\s]?ac[-\\s]?3\\b|\\bddp\\b|eac3|dd\\+', 'EAC3·DD+');
+    pushIf('\\bac[-\\s]?3\\b|\\bdd\\b(?!p|\\+)', 'AC3·DD');
+    pushIf('dts[\\s._:-]*x\\b|\\bdtsx\\b', 'DTS-X');
+    pushIf('dts[\\s._-]?hd[\\s._-]?(ma|master)|dtshdma|dtshd\\s*ma', 'DTS-HD-MA');
+    pushIf('dts[\\s._-]?hd\\b|\\bdtshd\\b', 'DTS-HD');
+    pushIf('\\bdts\\b(?![\\s._:-]*(x|hd))', 'DTS');
+    pushIf('\\b7[\\.\\s_-]?1\\b|8ch\\b|8\\s*channel', '7.1');
+    pushIf('\\b5[\\.\\s_-]?1\\b|6ch\\b|6\\s*channel', '5.1');
+    return [...new Set(tags)];
 }
 
 builder.defineStreamHandler(async ({ type, id, config = {} }) => {
@@ -2331,6 +2370,8 @@ builder.defineStreamHandler(async ({ type, id, config = {} }) => {
                         let nameUI, titleUI;
                         let displayTitle = s.originalTitle || s.title || 'Stream';
 
+                        const techTags = buildStreamTechTags([displayTitle, s.quality, s.description]);
+
                         if (aiostreamsMode && (type === 'series' || type === 'anime')) {
                             // Strip redundant season/episode patterns (e.g. 1x02, 4x3, S01E02, S1E2, etc.) case-insensitively
                             displayTitle = displayTitle
@@ -2357,7 +2398,7 @@ builder.defineStreamHandler(async ({ type, id, config = {} }) => {
                         let resolutionForFilename = '';
 
                         if (aiostreamsMode) {
-                            // Strip any leading emoji (like ??) so AIOStreams indexerRegex matches the name (Vidxgo, CinemaCity, etc.) perfectly.
+                            // Strip any leading emoji (like 📡) so AIOStreams indexerRegex matches the name (Vidxgo, CinemaCity, etc.) perfectly.
                             source = source.replace(/^[\p{Emoji_Presentation}\s]+|[^\p{L}\p{N}\s]+/gu, '').trim();
 
                             // AIOStreams formatting
@@ -2372,16 +2413,20 @@ builder.defineStreamHandler(async ({ type, id, config = {} }) => {
 
                             nameUI = `EasyStreams HTTP\n${resolution}`;
                             
-                            const lines = [`?? ${displayTitle} ${resolution}`];
+                            const lines = [`🎬 ${displayTitle} ${resolution}`];
+                            const nonResTags = techTags.filter((t) => !/^\d{3,4}p$/i.test(t) && !/^4K/i.test(t));
+                            if (nonResTags.length) {
+                                lines.push(`⚙️ ${nonResTags.join(' · ')}`);
+                            }
                             if (fillerTag) {
                                 lines.push(fillerTag);
                             }
                             if (s.description) {
                                 const sizeMatch = String(s.description).match(/(\d+(?:\.\d+)?\s*(?:GB|MB|KB|TB))/i);
                                 if (sizeMatch) {
-                                    lines.push(`?? ${sizeMatch[1]}`);
+                                    lines.push(`💾 ${sizeMatch[1]}`);
                                 } else {
-                                    lines.push(`?? ${s.description}`);
+                                    lines.push(`💾 ${s.description}`);
                                 }
                             }
                             
@@ -2389,46 +2434,46 @@ builder.defineStreamHandler(async ({ type, id, config = {} }) => {
                             // so that AIOStreams getLanguages parser (flag-based) detects it cleanly.
                             if (s.language) {
                                 const cleanLang = String(s.language).trim().toLowerCase();
-                                if (cleanLang === 'italian' || cleanLang === 'it' || cleanLang === 'ita' || cleanLang.includes('????')) {
-                                    resolvedLangFlag = '????';
-                                } else if (cleanLang === 'english' || cleanLang === 'en' || cleanLang === 'eng' || cleanLang.includes('????') || cleanLang.includes('????')) {
-                                    resolvedLangFlag = '????';
-                                } else if (cleanLang === 'japanese' || cleanLang === 'ja' || cleanLang === 'jp' || cleanLang === 'jpn' || cleanLang.includes('????')) {
-                                    resolvedLangFlag = '????';
-                                } else if (cleanLang === 'french' || cleanLang === 'fr' || cleanLang === 'fra' || cleanLang.includes('????')) {
-                                    resolvedLangFlag = '????';
-                                } else if (cleanLang === 'spanish' || cleanLang === 'es' || cleanLang === 'spa' || cleanLang.includes('????')) {
-                                    resolvedLangFlag = '????';
-                                } else if (cleanLang === 'german' || cleanLang === 'de' || cleanLang === 'deu' || cleanLang.includes('????')) {
-                                    resolvedLangFlag = '????';
+                                if (cleanLang === 'italian' || cleanLang === 'it' || cleanLang === 'ita' || cleanLang.includes('🇮🇹')) {
+                                    resolvedLangFlag = '🇮🇹';
+                                } else if (cleanLang === 'english' || cleanLang === 'en' || cleanLang === 'eng' || cleanLang.includes('🇬🇧') || cleanLang.includes('🇺🇸')) {
+                                    resolvedLangFlag = '🇬🇧';
+                                } else if (cleanLang === 'japanese' || cleanLang === 'ja' || cleanLang === 'jp' || cleanLang === 'jpn' || cleanLang.includes('🇯🇵')) {
+                                    resolvedLangFlag = '🇯🇵';
+                                } else if (cleanLang === 'french' || cleanLang === 'fr' || cleanLang === 'fra' || cleanLang.includes('🇫🇷')) {
+                                    resolvedLangFlag = '🇫🇷';
+                                } else if (cleanLang === 'spanish' || cleanLang === 'es' || cleanLang === 'spa' || cleanLang.includes('🇪🇸')) {
+                                    resolvedLangFlag = '🇪🇸';
+                                } else if (cleanLang === 'german' || cleanLang === 'de' || cleanLang === 'deu' || cleanLang.includes('🇩🇪')) {
+                                    resolvedLangFlag = '🇩🇪';
                                 } else if (/[\u{1F1E6}-\u{1F1FF}]{2}/u.test(s.language)) {
                                     resolvedLangFlag = s.language;
                                 }
                             }
 
                             if (resolvedLangFlag) {
-                                lines.push(`??? ${resolvedLangFlag}`);
+                                lines.push(`🗣️ ${resolvedLangFlag}`);
                             } else if (s.language) {
-                                lines.push(`??? ${s.language}`);
+                                lines.push(`🗣️ ${s.language}`);
                             }
 
-                            lines.push(`?? ${source}`);
+                            lines.push(`🔗 ${source}`);
                             titleUI = lines.join('\n');
 
                             resolutionForFilename = resolution;
                         } else {
                             // Default formatting
                             nameUI = (s.qualityTag && s.qualityTag !== 'Unknown') ? s.qualityTag : (s.providerName || s.name || 'EasyStreams');
-                            titleUI = `?? ${displayTitle}`;
+                            titleUI = `📁 ${displayTitle}${techTags.length ? ` ${techTags.join(' ')}` : ''}`;
                             if (fillerTag) {
                                 titleUI += `\n${fillerTag}`;
                             }
                             titleUI += `\n${s.providerName || s.name || 'EasyStreams'}`;
                             if (s.description) titleUI += ` | ${s.description}`;
                             if (s.language) {
-                                titleUI += `\n??? ${s.language}  ??EasyStreams`;
+                                titleUI += `\n🗣️ ${s.language}  🔍EasyStreams`;
                             } else {
-                                titleUI += `\n??EasyStreams`;
+                                titleUI += `\n🔍EasyStreams`;
                             }
                         }
 
@@ -2576,7 +2621,7 @@ builder.defineStreamHandler(async ({ type, id, config = {} }) => {
             // 2. Language Priority (ITA first)
             const getLangScore = (stream) => {
                 const lang = stream.language || '';
-                return lang === '????' ? 1 : 0;
+                return lang === '🇮🇹' ? 1 : 0;
             };
 
             const langScoreA = getLangScore(a);
@@ -2588,11 +2633,11 @@ builder.defineStreamHandler(async ({ type, id, config = {} }) => {
 
             // 3. Quality Priority
             const qualityOrder = {
-                '??4K UHD': 10,
+                '🔥4K UHD': 10,
                 '? QHD': 9,
-                '?? FHD': 8,
-                '?? HD': 7,
-                '?? Low Quality': 1
+                '🚀 FHD': 8,
+                '💿 HD': 7,
+                '💩 Low Quality': 1
             };
 
             const getScore = (str) => {
@@ -3193,7 +3238,7 @@ function sendManifest(res, config = {}) {
     const proxyProvidersDisabled = ['mediaset']
         .every((name) => disabledProviders.has(name));
     if (resolveEasyProxyEntriesFromConfig(config).length === 0 && !proxyProvidersDisabled) {
-        manifest.description = `${manifest.description} ?? EasyProxy non configurato: Mediaset Infinity richiede EasyProxy.`;
+        manifest.description = `${manifest.description} ⚠️ EasyProxy non configurato: Mediaset Infinity richiede EasyProxy.`;
     }
     manifest.behaviorHints = {
         ...(manifest.behaviorHints || {}),
@@ -3210,6 +3255,10 @@ app.get('/', (req, res) => {
 // Nuvio plugin hosting: scrapers manifest + provider bundles.
 app.get('/nuvio/manifest.json', (req, res) => {
     res.sendFile(require('path').join(__dirname, 'manifest.json'));
+});
+app.get('/nuvio/badges.json', (req, res) => {
+    res.setHeader('Access-Control-Allow-Origin', '*');
+    res.sendFile(require('path').join(__dirname, 'badges.json'));
 });
 app.use('/nuvio/providers', express.static(require('path').join(__dirname, 'providers'), {
     setHeaders: (res) => res.setHeader('Cache-Control', 'no-cache')
