@@ -1,0 +1,7 @@
+services:
+  - type: web
+    name: easystreams
+    runtime: docker
+    plan: free
+    autoDeploy: true
+    healthCheckPath: /manifest.json
