@@ -692,7 +692,7 @@ async function shouldFailoverEasyProxy(proxyEntry) {
     const proxyUrl = proxyEntry?.url;
     if (!proxyUrl) return false;
 
-    // Se l'URL non è HTTPS, lo consideriamo potenzialmente locale (localhost, IP privati, ecc.)
+    // Se l'URL non ï¿½ HTTPS, lo consideriamo potenzialmente locale (localhost, IP privati, ecc.)
     // In questi casi non vogliamo scartare il proxy anche se sembra lento o offline.
     if (!proxyUrl.toLowerCase().startsWith('https:')) {
         return false;
@@ -1655,7 +1655,7 @@ function getProviderExecutionOrder(type, providerId, requestContext, animeRoutin
 
 const builder = new addonBuilder({
     id: 'org.bestia.easystreams',
-    version: '1.3.47',
+    version: '1.3.48',
     name: 'Easy Streams',
     description: 'Italian Streams providers',
     catalogs: [
@@ -2686,7 +2686,7 @@ function formatCatalogDescription(item) {
     if (Number.isInteger(item.tmdb && item.tmdb.totalEpisodes)) {
         parts.push(`${item.tmdb.totalEpisodes} episodi totali`);
     }
-    return parts.join(' • ');
+    return parts.join(' ï¿½ ');
 }
 
 const CATALOG_SOURCES = {
@@ -2717,7 +2717,7 @@ async function buildCatalogMetas(kind) {
             metas.push({
                 id: `tmdb:${item.tmdb.tmdbId}`,
                 type: source.metaType,
-                name: source.withEpisode ? `${item.title} • Ep ${item.episode}` : item.title,
+                name: source.withEpisode ? `${item.title} ï¿½ Ep ${item.episode}` : item.title,
                 poster: item.poster || null,
                 description: formatCatalogDescription(item),
                 releaseInfo,
@@ -2763,10 +2763,10 @@ async function applyTmdbLatinFallback(name, description, endpoint, tmdbId) {
                 const originalName = english.original_title || english.original_name || null;
                 if (englishName && hasLatinLetters(englishName)) {
                     outName = originalName && originalName !== englishName && hasLatinLetters(originalName)
-                        ? `${englishName} · ${originalName}`
-                        : `${englishName} · ${name}`;
+                        ? `${englishName} ï¿½ ${originalName}`
+                        : `${englishName} ï¿½ ${name}`;
                 } else if (originalName && hasLatinLetters(originalName)) {
-                    outName = `${originalName} · ${name}`;
+                    outName = `${originalName} ï¿½ ${name}`;
                 }
             }
             if (!outDescription && english.overview) outDescription = english.overview;
@@ -2775,26 +2775,96 @@ async function applyTmdbLatinFallback(name, description, endpoint, tmdbId) {
     return { name: outName, description: outDescription };
 }
 
+function normalizeSearchQuery(value) {
+    return String(value || '')
+        .toLowerCase()
+        .normalize('NFKD')
+        .replace(/[\u0300-\u036f]/g, '')
+        .replace(/[^\p{L}\p{N}\s]/gu, ' ')
+        .replace(/\b(the|a|an|il|lo|la|i|gli|le|un|uno|una|di|del|della|dei|delle|da|in|con|su|per|tra|fra)\b/g, ' ')
+        .replace(/\s+/g, ' ')
+        .trim();
+}
+
+function scoreSearchMatch(candidateName, rawQuery, normalizedQuery) {
+    const candidate = String(candidateName || '').toLowerCase();
+    if (!candidate) return 0;
+    if (candidate === String(rawQuery || '').toLowerCase()) return 4;
+    const normalizedCandidate = normalizeSearchQuery(candidate);
+    if (normalizedQuery && normalizedCandidate === normalizedQuery) return 3;
+    if (normalizedCandidate.startsWith(normalizedQuery)) return 2;
+    if (normalizedCandidate.includes(normalizedQuery)) return 1;
+    return 0;
+}
+
+async function fetchTmdbSearchPage(rawQuery, language) {
+    try {
+        const data = await fetchJsonCached(
+            `https://api.themoviedb.org/3/search/multi?api_key=${TMDB_API_KEY}&query=${encodeURIComponent(rawQuery)}&language=${language}&include_adult=false&page=1`,
+            12000
+        );
+        return Array.isArray(data && data.results) ? data.results : [];
+    } catch {
+        return [];
+    }
+}
+
+async function searchTmdbMultiLanguage(rawQuery) {
+    const [italianResults, englishResults] = await Promise.all([
+        fetchTmdbSearchPage(rawQuery, 'it-IT'),
+        fetchTmdbSearchPage(rawQuery, 'en-US')
+    ]);
+    const merged = new Map();
+    for (const r of [...englishResults, ...italianResults]) {
+        if (!r || r.media_type !== 'movie' && r.media_type !== 'tv') continue;
+        if (!Number.isFinite(Number(r.id))) continue;
+        const key = `${r.media_type}:${r.id}`;
+        const existing = merged.get(key);
+        if (existing) {
+            for (const field of ['title', 'name', 'original_title', 'original_name', 'overview', 'poster_path', 'release_date', 'first_air_date', 'popularity']) {
+                if ((existing[field] === undefined || existing[field] === null || existing[field] === '') && r[field] !== undefined) {
+                    existing[field] = r[field];
+                }
+            }
+        } else {
+            merged.set(key, { ...r });
+        }
+    }
+    return Array.from(merged.values());
+}
+
 async function buildTmdbSearchMetas(query) {
     const q = String(query || '').trim();
     if (!q) return [];
     try {
-        const data = await fetchJsonCached(
-            `https://api.themoviedb.org/3/search/multi?api_key=${TMDB_API_KEY}&query=${encodeURIComponent(q)}&language=it-IT&include_adult=false&page=1`,
-            12000
-        );
-        const results = Array.isArray(data && data.results) ? data.results : [];
+        let results = await searchTmdbMultiLanguage(q);
+        if (!results.length) {
+            const normalized = normalizeSearchQuery(q);
+            if (normalized && normalized !== q.toLowerCase().replace(/\s+/g, ' ').trim() && /[a-z0-9]/i.test(normalized.replace(/\s/g, ''))) {
+                results = await searchTmdbMultiLanguage(normalized);
+            }
+        }
+        const normalizedQuery = normalizeSearchQuery(q);
+        results.sort((a, b) => {
+            const nameA = a.title || a.name || a.original_title || a.original_name || '';
+            const nameB = b.title || b.name || b.original_title || b.original_name || '';
+            const scoreA = scoreSearchMatch(nameA, q, normalizedQuery);
+            const scoreB = scoreSearchMatch(nameB, q, normalizedQuery);
+            if (scoreA !== scoreB) return scoreB - scoreA;
+            const popA = Number(a.popularity) || 0;
+            const popB = Number(b.popularity) || 0;
+            return popB - popA;
+        });
         const seen = new Set();
         const metas = [];
-        for (const r of results) {
+        for (const r of results.slice(0, 40)) {
             if (!r || r.adult || !r.poster_path) continue;
             if (r.media_type !== 'movie' && r.media_type !== 'tv') continue;
-            if (!Number.isFinite(Number(r.id))) continue;
             const isMovie = r.media_type === 'movie';
             let name = (isMovie ? (r.title || r.original_title) : (r.name || r.original_name)) || '';
             if (!name) continue;
             let description = r.overview || '';
-            if (!hasLatinLetters(name) || !description) {
+            if (!hasLatinLetters(name)) {
                 const fallback = await applyTmdbLatinFallback(name, description, isMovie ? 'movie' : 'tv', r.id);
                 name = fallback.name;
                 description = fallback.description;
@@ -3278,7 +3348,7 @@ async function warmupGuardoserie(force = false) {
 let server;
 (async () => {
     try {
-        // Esegui il warmup iniziale (salta se c'è già una sessione valida su disco)
+        // Esegui il warmup iniziale (salta se c'ï¿½ giï¿½ una sessione valida su disco)
         warmupGuardoserie().catch(e => {
             console.error('[Warmup] Errore critico Guardoserie:', e);
         });
