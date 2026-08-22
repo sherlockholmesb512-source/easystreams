@@ -1,4 +1,4 @@
-﻿const { spawn } = require('child_process');
+const { spawn } = require('child_process');
 const { sanitizeLogArgs } = require('./src/utils/log_sanitizer');
 
 try {
@@ -692,7 +692,7 @@ async function shouldFailoverEasyProxy(proxyEntry) {
     const proxyUrl = proxyEntry?.url;
     if (!proxyUrl) return false;
 
-    // Se l'URL non è HTTPS, lo consideriamo potenzialmente locale (localhost, IP privati, ecc.)
+    // Se l'URL non � HTTPS, lo consideriamo potenzialmente locale (localhost, IP privati, ecc.)
     // In questi casi non vogliamo scartare il proxy anche se sembra lento o offline.
     if (!proxyUrl.toLowerCase().startsWith('https:')) {
         return false;
@@ -1655,7 +1655,7 @@ function getProviderExecutionOrder(type, providerId, requestContext, animeRoutin
 
 const builder = new addonBuilder({
     id: 'org.bestia.easystreams',
-    version: '1.3.46',
+    version: '1.3.47',
     name: 'Easy Streams',
     description: 'Italian Streams providers',
     catalogs: [
@@ -2019,13 +2019,13 @@ async function getAnimeFillerTagForEpisode(type, requestContext, season, episode
     if (match) {
         const lowerType = match.type.toLowerCase();
         if (lowerType.includes("mixed")) {
-            return "⚠️ MIXED CANON";
+            return "?? MIXED CANON";
         } else if (lowerType.includes("filler")) {
-            return "⛔ FILLER";
+            return "? FILLER";
         } else if (lowerType === "anime canon") {
-            return "🔵 ANIME CANON";
+            return "?? ANIME CANON";
         } else if (lowerType === "manga canon" || lowerType.includes("canon")) {
-            return "✅ MANGA CANON";
+            return "? MANGA CANON";
         }
     }
 
@@ -2357,7 +2357,7 @@ builder.defineStreamHandler(async ({ type, id, config = {} }) => {
                         let resolutionForFilename = '';
 
                         if (aiostreamsMode) {
-                            // Strip any leading emoji (like 📡) so AIOStreams indexerRegex matches the name (Vidxgo, CinemaCity, etc.) perfectly.
+                            // Strip any leading emoji (like ??) so AIOStreams indexerRegex matches the name (Vidxgo, CinemaCity, etc.) perfectly.
                             source = source.replace(/^[\p{Emoji_Presentation}\s]+|[^\p{L}\p{N}\s]+/gu, '').trim();
 
                             // AIOStreams formatting
@@ -2372,16 +2372,16 @@ builder.defineStreamHandler(async ({ type, id, config = {} }) => {
 
                             nameUI = `EasyStreams HTTP\n${resolution}`;
                             
-                            const lines = [`🎬 ${displayTitle} ${resolution}`];
+                            const lines = [`?? ${displayTitle} ${resolution}`];
                             if (fillerTag) {
                                 lines.push(fillerTag);
                             }
                             if (s.description) {
                                 const sizeMatch = String(s.description).match(/(\d+(?:\.\d+)?\s*(?:GB|MB|KB|TB))/i);
                                 if (sizeMatch) {
-                                    lines.push(`💾 ${sizeMatch[1]}`);
+                                    lines.push(`?? ${sizeMatch[1]}`);
                                 } else {
-                                    lines.push(`💾 ${s.description}`);
+                                    lines.push(`?? ${s.description}`);
                                 }
                             }
                             
@@ -2389,46 +2389,46 @@ builder.defineStreamHandler(async ({ type, id, config = {} }) => {
                             // so that AIOStreams getLanguages parser (flag-based) detects it cleanly.
                             if (s.language) {
                                 const cleanLang = String(s.language).trim().toLowerCase();
-                                if (cleanLang === 'italian' || cleanLang === 'it' || cleanLang === 'ita' || cleanLang.includes('🇮🇹')) {
-                                    resolvedLangFlag = '🇮🇹';
-                                } else if (cleanLang === 'english' || cleanLang === 'en' || cleanLang === 'eng' || cleanLang.includes('🇬🇧') || cleanLang.includes('🇺🇸')) {
-                                    resolvedLangFlag = '🇬🇧';
-                                } else if (cleanLang === 'japanese' || cleanLang === 'ja' || cleanLang === 'jp' || cleanLang === 'jpn' || cleanLang.includes('🇯🇵')) {
-                                    resolvedLangFlag = '🇯🇵';
-                                } else if (cleanLang === 'french' || cleanLang === 'fr' || cleanLang === 'fra' || cleanLang.includes('🇫🇷')) {
-                                    resolvedLangFlag = '🇫🇷';
-                                } else if (cleanLang === 'spanish' || cleanLang === 'es' || cleanLang === 'spa' || cleanLang.includes('🇪🇸')) {
-                                    resolvedLangFlag = '🇪🇸';
-                                } else if (cleanLang === 'german' || cleanLang === 'de' || cleanLang === 'deu' || cleanLang.includes('🇩🇪')) {
-                                    resolvedLangFlag = '🇩🇪';
+                                if (cleanLang === 'italian' || cleanLang === 'it' || cleanLang === 'ita' || cleanLang.includes('????')) {
+                                    resolvedLangFlag = '????';
+                                } else if (cleanLang === 'english' || cleanLang === 'en' || cleanLang === 'eng' || cleanLang.includes('????') || cleanLang.includes('????')) {
+                                    resolvedLangFlag = '????';
+                                } else if (cleanLang === 'japanese' || cleanLang === 'ja' || cleanLang === 'jp' || cleanLang === 'jpn' || cleanLang.includes('????')) {
+                                    resolvedLangFlag = '????';
+                                } else if (cleanLang === 'french' || cleanLang === 'fr' || cleanLang === 'fra' || cleanLang.includes('????')) {
+                                    resolvedLangFlag = '????';
+                                } else if (cleanLang === 'spanish' || cleanLang === 'es' || cleanLang === 'spa' || cleanLang.includes('????')) {
+                                    resolvedLangFlag = '????';
+                                } else if (cleanLang === 'german' || cleanLang === 'de' || cleanLang === 'deu' || cleanLang.includes('????')) {
+                                    resolvedLangFlag = '????';
                                 } else if (/[\u{1F1E6}-\u{1F1FF}]{2}/u.test(s.language)) {
                                     resolvedLangFlag = s.language;
                                 }
                             }
 
                             if (resolvedLangFlag) {
-                                lines.push(`🗣️ ${resolvedLangFlag}`);
+                                lines.push(`??? ${resolvedLangFlag}`);
                             } else if (s.language) {
-                                lines.push(`🗣️ ${s.language}`);
+                                lines.push(`??? ${s.language}`);
                             }
 
-                            lines.push(`🔗 ${source}`);
+                            lines.push(`?? ${source}`);
                             titleUI = lines.join('\n');
 
                             resolutionForFilename = resolution;
                         } else {
                             // Default formatting
                             nameUI = (s.qualityTag && s.qualityTag !== 'Unknown') ? s.qualityTag : (s.providerName || s.name || 'EasyStreams');
-                            titleUI = `📁 ${displayTitle}`;
+                            titleUI = `?? ${displayTitle}`;
                             if (fillerTag) {
                                 titleUI += `\n${fillerTag}`;
                             }
                             titleUI += `\n${s.providerName || s.name || 'EasyStreams'}`;
                             if (s.description) titleUI += ` | ${s.description}`;
                             if (s.language) {
-                                titleUI += `\n🗣️ ${s.language}  🔍EasyStreams`;
+                                titleUI += `\n??? ${s.language}  ??EasyStreams`;
                             } else {
-                                titleUI += `\n🔍EasyStreams`;
+                                titleUI += `\n??EasyStreams`;
                             }
                         }
 
@@ -2576,7 +2576,7 @@ builder.defineStreamHandler(async ({ type, id, config = {} }) => {
             // 2. Language Priority (ITA first)
             const getLangScore = (stream) => {
                 const lang = stream.language || '';
-                return lang === '🇮🇹' ? 1 : 0;
+                return lang === '????' ? 1 : 0;
             };
 
             const langScoreA = getLangScore(a);
@@ -2588,11 +2588,11 @@ builder.defineStreamHandler(async ({ type, id, config = {} }) => {
 
             // 3. Quality Priority
             const qualityOrder = {
-                '🔥4K UHD': 10,
-                '✨ QHD': 9,
-                '🚀 FHD': 8,
-                '💿 HD': 7,
-                '💩 Low Quality': 1
+                '??4K UHD': 10,
+                '? QHD': 9,
+                '?? FHD': 8,
+                '?? HD': 7,
+                '?? Low Quality': 1
             };
 
             const getScore = (str) => {
@@ -2686,7 +2686,7 @@ function formatCatalogDescription(item) {
     if (Number.isInteger(item.tmdb && item.tmdb.totalEpisodes)) {
         parts.push(`${item.tmdb.totalEpisodes} episodi totali`);
     }
-    return parts.join(' • ');
+    return parts.join(' � ');
 }
 
 const CATALOG_SOURCES = {
@@ -2717,7 +2717,7 @@ async function buildCatalogMetas(kind) {
             metas.push({
                 id: `tmdb:${item.tmdb.tmdbId}`,
                 type: source.metaType,
-                name: source.withEpisode ? `${item.title} • Ep ${item.episode}` : item.title,
+                name: source.withEpisode ? `${item.title} � Ep ${item.episode}` : item.title,
                 poster: item.poster || null,
                 description: formatCatalogDescription(item),
                 releaseInfo,
@@ -2737,6 +2737,44 @@ builder.defineCatalogHandler(async ({ id }) => {
     return { metas };
 });
 
+function hasLatinLetters(value) {
+    return /[A-Za-z]{2,}/.test(String(value || ''));
+}
+
+async function fetchTmdbEnglishDetails(endpoint, tmdbId) {
+    try {
+        return await fetchJsonCached(
+            `https://api.themoviedb.org/3/${endpoint}/${tmdbId}?api_key=${TMDB_API_KEY}&language=en-US`,
+            10000
+        );
+    } catch {
+        return null;
+    }
+}
+
+async function applyTmdbLatinFallback(name, description, endpoint, tmdbId) {
+    let outName = name;
+    let outDescription = description;
+    if (!hasLatinLetters(outName) || !outDescription) {
+        const english = await fetchTmdbEnglishDetails(endpoint, tmdbId);
+        if (english) {
+            if (!hasLatinLetters(outName)) {
+                const englishName = english.title || english.name || null;
+                const originalName = english.original_title || english.original_name || null;
+                if (englishName && hasLatinLetters(englishName)) {
+                    outName = originalName && originalName !== englishName && hasLatinLetters(originalName)
+                        ? `${englishName} � ${originalName}`
+                        : `${englishName} � ${name}`;
+                } else if (originalName && hasLatinLetters(originalName)) {
+                    outName = `${originalName} � ${name}`;
+                }
+            }
+            if (!outDescription && english.overview) outDescription = english.overview;
+        }
+    }
+    return { name: outName, description: outDescription };
+}
+
 async function buildTmdbSearchMetas(query) {
     const q = String(query || '').trim();
     if (!q) return [];
@@ -2753,8 +2791,14 @@ async function buildTmdbSearchMetas(query) {
             if (r.media_type !== 'movie' && r.media_type !== 'tv') continue;
             if (!Number.isFinite(Number(r.id))) continue;
             const isMovie = r.media_type === 'movie';
-            const name = (isMovie ? (r.title || r.original_title) : (r.name || r.original_name)) || '';
+            let name = (isMovie ? (r.title || r.original_title) : (r.name || r.original_name)) || '';
             if (!name) continue;
+            let description = r.overview || '';
+            if (!hasLatinLetters(name) || !description) {
+                const fallback = await applyTmdbLatinFallback(name, description, isMovie ? 'movie' : 'tv', r.id);
+                name = fallback.name;
+                description = fallback.description;
+            }
             const key = `${isMovie ? 'movie' : 'series'}:tmdb:${r.id}`;
             if (seen.has(key)) continue;
             seen.add(key);
@@ -2764,7 +2808,7 @@ async function buildTmdbSearchMetas(query) {
                 type: isMovie ? 'movie' : 'series',
                 name,
                 poster: tmdbImageUrl(r.poster_path, 'w500'),
-                description: r.overview || '',
+                description,
                 releaseInfo: year || null
             });
             if (metas.length >= 25) break;
@@ -2912,14 +2956,21 @@ async function buildTmdbSeriesMeta(tmdbId) {
 
     let imdbRating = Number.isFinite(details.vote_average) && details.vote_average > 0 ? String(details.vote_average) : null;
 
+    const seriesFallback = await applyTmdbLatinFallback(
+        details.name || details.original_name || 'Serie',
+        details.overview || '',
+        'tv',
+        tmdbId
+    );
+
     const meta = {
         id: `tmdb:${tmdbId}`,
         type: 'series',
-        name: details.name || details.original_name || 'Serie',
+        name: seriesFallback.name,
         poster: tmdbImageUrl(details.poster_path, 'w500'),
         background: tmdbImageUrl(details.backdrop_path, 'w780'),
         logo: pickTmdbLogo(details.images),
-        description: details.overview || '',
+        description: seriesFallback.description,
         releaseInfo: firstYear && lastYear ? (firstYear === lastYear ? firstYear : `${firstYear}-${lastYear}`) : null,
         imdbRating,
         genres: Array.isArray(details.genres) ? details.genres.map((g) => g.name).filter(Boolean) : [],
@@ -2966,14 +3017,21 @@ async function buildTmdbMovieMeta(tmdbId) {
 
     let imdbRating = Number.isFinite(details.vote_average) && details.vote_average > 0 ? String(details.vote_average) : null;
 
+    const movieFallback = await applyTmdbLatinFallback(
+        details.title || details.original_title || 'Film',
+        details.overview || '',
+        'movie',
+        tmdbId
+    );
+
     const meta = {
         id: `tmdb:${tmdbId}`,
         type: 'movie',
-        name: details.title || details.original_title || 'Film',
+        name: movieFallback.name,
         poster: tmdbImageUrl(details.poster_path, 'w500'),
         background: tmdbImageUrl(details.backdrop_path, 'w780'),
         logo: pickTmdbLogo(details.images),
-        description: details.overview || '',
+        description: movieFallback.description,
         releaseInfo: year,
         imdbRating,
         genres: Array.isArray(details.genres) ? details.genres.map((g) => g.name).filter(Boolean) : [],
@@ -3065,7 +3123,7 @@ function sendManifest(res, config = {}) {
     const proxyProvidersDisabled = ['mediaset']
         .every((name) => disabledProviders.has(name));
     if (resolveEasyProxyEntriesFromConfig(config).length === 0 && !proxyProvidersDisabled) {
-        manifest.description = `${manifest.description} ⚠️ EasyProxy non configurato: Mediaset Infinity richiede EasyProxy.`;
+        manifest.description = `${manifest.description} ?? EasyProxy non configurato: Mediaset Infinity richiede EasyProxy.`;
     }
     manifest.behaviorHints = {
         ...(manifest.behaviorHints || {}),
@@ -3220,7 +3278,7 @@ async function warmupGuardoserie(force = false) {
 let server;
 (async () => {
     try {
-        // Esegui il warmup iniziale (salta se c'è già una sessione valida su disco)
+        // Esegui il warmup iniziale (salta se c'� gi� una sessione valida su disco)
         warmupGuardoserie().catch(e => {
             console.error('[Warmup] Errore critico Guardoserie:', e);
         });
