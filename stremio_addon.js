@@ -109,6 +109,89 @@ const express = require('express');
 const app = express();
 const path = require('path');
 const { renderLandingPage } = require('./src/views/landing_page');
+
+// ── Internal HLS Proxy ───────────────────────────────────────────────────────
+const INTERNAL_PROXY_SECRET = process.env.PROXY_SECRET || 'es-proxy-internal';
+let _detectedExternalUrl = process.env.EXTERNAL_URL || '';
+app.get('/proxy/media', async (req, res) => {
+    if (!_detectedExternalUrl && req.headers.host) {
+        const proto = req.headers['x-forwarded-proto'] || 'https';
+        _detectedExternalUrl = `${proto}://${req.headers.host}`;
+    }
+    try {
+        const { url, referer, origin, ua, secret } = req.query;
+        if (!url) return res.status(400).json({ error: 'Missing url param' });
+        if (secret !== INTERNAL_PROXY_SECRET) return res.status(403).json({ error: 'Invalid secret' });
+
+        const targetUrl = decodeURIComponent(url);
+        const headers = {};
+        if (referer) headers['Referer'] = decodeURIComponent(referer);
+        if (origin) headers['Origin'] = decodeURIComponent(origin);
+        headers['User-Agent'] = ua ? decodeURIComponent(ua) : 'Mozilla/5.0 (X11; Linux x86_64; rv:150.0) Gecko/20100101 Firefox/150.0';
+        headers['Accept'] = '*/*';
+
+        const resp = await fetch(targetUrl, { headers, redirect: 'follow' });
+        if (!resp.ok) {
+            return res.status(resp.status).json({ error: `Upstream ${resp.status}` });
+        }
+
+        const contentType = resp.headers.get('content-type') || '';
+        const isHlsText = contentType.includes('mpegurl') || contentType.includes('m3u8') || targetUrl.endsWith('.m3u8') || /\.m3u8(\?|$)/i.test(targetUrl);
+
+        if (isHlsText) {
+            const body = await resp.text();
+            res.setHeader('Access-Control-Allow-Origin', '*');
+            res.setHeader('Access-Control-Allow-Headers', '*');
+            const base = new URL(targetUrl);
+            const baseUrl = base.origin + base.pathname.replace(/\/[^/]*$/, '/');
+            const secretParam = encodeURIComponent(INTERNAL_PROXY_SECRET);
+            const refererEnc = referer ? encodeURIComponent(referer) : encodeURIComponent(base.origin + '/');
+            const originEnc = origin ? encodeURIComponent(origin) : encodeURIComponent(base.origin);
+            const uaEnc = ua ? encodeURIComponent(ua) : encodeURIComponent(headers['User-Agent']);
+
+            const rewritten = body.replace(/^(?!#)(.+)$/gm, (line) => {
+                const clean = line.split('?')[0];
+                let absUrl;
+                if (clean.startsWith('http://') || clean.startsWith('https://')) {
+                    absUrl = clean;
+                } else if (clean.endsWith('.m3u8') || clean.endsWith('.ts') || clean.endsWith('.aac')) {
+                    absUrl = baseUrl + clean;
+                } else {
+                    return line;
+                }
+                const qs = new URLSearchParams({ url: absUrl, referer: refererEnc, origin: originEnc, ua: uaEnc, secret: secretParam });
+                return `/proxy/media?${qs.toString()}`;
+            });
+
+            res.setHeader('Content-Type', 'application/vnd.apple.mpegurl; charset=utf-8');
+            res.setHeader('Cache-Control', 'max-age=5, public');
+            res.send(rewritten);
+        } else {
+            const buffer = Buffer.from(await resp.arrayBuffer());
+            res.setHeader('Access-Control-Allow-Origin', '*');
+            res.setHeader('Access-Control-Allow-Headers', '*');
+            res.setHeader('Content-Type', contentType || 'application/octet-stream');
+            res.setHeader('Cache-Control', 'max-age=3600, public');
+            res.send(buffer);
+        }
+    } catch (e) {
+        console.error('[Proxy] Error:', e.message);
+        res.status(502).json({ error: 'Proxy error: ' + e.message });
+    }
+});
+
+function buildInternalProxyUrl(targetUrl, referer, origin) {
+    if (!targetUrl) return null;
+    const params = new URLSearchParams({
+        url: encodeURIComponent(targetUrl),
+        referer: encodeURIComponent(referer || ''),
+        origin: encodeURIComponent(origin || ''),
+        ua: encodeURIComponent('Mozilla/5.0 (X11; Linux x86_64; rv:150.0) Gecko/20100101 Firefox/150.0'),
+        secret: INTERNAL_PROXY_SECRET
+    });
+    const base = _detectedExternalUrl || `http://localhost:${PORT}`;
+    return `${base}/proxy/media?${params.toString()}`;
+}
 function readPositiveIntEnv(name, fallback) {
     const value = Number.parseInt(String(process.env[name] || ''), 10);
     return Number.isInteger(value) && value > 0 ? value : fallback;
@@ -2303,7 +2386,16 @@ builder.defineStreamHandler(async ({ type, id, config = {} }) => {
                                     )
                                 );
                             } else {
-                                finalStreamUrl = FALLBACK_PROXY_URL + encodeURIComponent(s.easyProxySourceUrl || s.url) + '&redirect_stream=true&max_res=true&api_password=mGH5%21%21K8bPdtFDf2';
+                                const internalProxied = buildInternalProxyUrl(
+                                    s.easyProxySourceUrl || s.url,
+                                    'https://streamingcommunity.computer/',
+                                    'https://streamingcommunity.computer'
+                                );
+                                if (internalProxied) {
+                                    finalStreamUrl = internalProxied;
+                                } else {
+                                    finalStreamUrl = FALLBACK_PROXY_URL + encodeURIComponent(s.easyProxySourceUrl || s.url) + '&redirect_stream=true&max_res=true&api_password=mGH5%21%21K8bPdtFDf2';
+                                }
                             }
                             proxiedByEasyProxy = true;
                         } else if (name === 'animeunity') {
@@ -2320,7 +2412,16 @@ builder.defineStreamHandler(async ({ type, id, config = {} }) => {
                                     )
                                 );
                             } else {
-                                finalStreamUrl = FALLBACK_PROXY_URL + encodeURIComponent(sourceUrl) + '&redirect_stream=true&max_res=true&api_password=mGH5%21%21K8bPdtFDf2';
+                                const internalProxied = buildInternalProxyUrl(
+                                    sourceUrl,
+                                    'https://www.animeunity.to/',
+                                    'https://www.animeunity.to'
+                                );
+                                if (internalProxied) {
+                                    finalStreamUrl = internalProxied;
+                                } else {
+                                    finalStreamUrl = FALLBACK_PROXY_URL + encodeURIComponent(sourceUrl) + '&redirect_stream=true&max_res=true&api_password=mGH5%21%21K8bPdtFDf2';
+                                }
                             }
                             proxiedByEasyProxy = true;
                         } else if (isStreamHgStream(s)) {
@@ -2350,6 +2451,17 @@ builder.defineStreamHandler(async ({ type, id, config = {} }) => {
                             if (proxiedVidxGoUrl) {
                                 finalStreamUrl = proxiedVidxGoUrl;
                                 proxiedByEasyProxy = true;
+                            } else {
+                                const vidxgoHeaders = s.behaviorHints?.proxyHeaders?.request || s.headers || {};
+                                const internalProxied = buildInternalProxyUrl(
+                                    finalStreamUrl,
+                                    vidxgoHeaders.Referer || vidxgoHeaders.referer || 'https://v.vidxgo.co/',
+                                    vidxgoHeaders.Origin || vidxgoHeaders.origin || 'https://v.vidxgo.co'
+                                );
+                                if (internalProxied) {
+                                    finalStreamUrl = internalProxied;
+                                    proxiedByEasyProxy = true;
+                                }
                             }
                         } else if (name === 'mediaset' || name === 'raiplay') {
                             // Official VOD providers return either a pre-built EasyProxy
@@ -2372,7 +2484,16 @@ builder.defineStreamHandler(async ({ type, id, config = {} }) => {
                                     )
                                 );
                             } else {
-                                finalStreamUrl = `https://edn591-ptn164-gnw494.kristianvenzi.com/extractor/video.${mixdropExtension}?host=Mixdrop&d=${encodeURIComponent(s.easyProxySourceUrl || s.url)}&redirect_stream=true&max_res=true&api_password=mGH5%21%21K8bPdtFDf2`;
+                                const internalProxied = buildInternalProxyUrl(
+                                    s.easyProxySourceUrl || s.url,
+                                    'https://mixdrop.co/',
+                                    'https://mixdrop.co'
+                                );
+                                if (internalProxied) {
+                                    finalStreamUrl = internalProxied;
+                                } else {
+                                    finalStreamUrl = `https://edn591-ptn164-gnw494.kristianvenzi.com/extractor/video.${mixdropExtension}?host=Mixdrop&d=${encodeURIComponent(s.easyProxySourceUrl || s.url)}&redirect_stream=true&max_res=true&api_password=mGH5%21%21K8bPdtFDf2`;
+                                }
                             }
                             proxiedByEasyProxy = true;
                         }
