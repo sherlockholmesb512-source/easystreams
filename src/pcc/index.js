@@ -164,7 +164,7 @@ async function getStreams(id, type, season, episode) {
         const quality = height >= 2160 ? '4K' : height >= 1440 ? '1440p' : height >= 1080 ? '1080p' : height >= 720 ? '720p' : height ? `${height}p` : 'Unknown';
         const hasItalianAudio = /#EXT-X-MEDIA:[^\r\n]*TYPE=AUDIO[^\r\n]*(?:LANGUAGE="(?:it|ita)"|NAME="(?:Italian|Italiano))/i.test(text);
         const hasAudio = /#EXT-X-MEDIA:[^\r\n]*TYPE=AUDIO/i.test(text);
-        if (hasAudio) streams.push(formatStream({ name: `Server ${server}`, title: movie ? mediaTitle : `${mediaTitle} ${siteSeason}x${siteEpisode}`, quality, language: hasItalianAudio ? 'Italian' : '', type: 'hls', url, behaviorHints: { notWebReady: true, proxyHeaders: { request: { Referer: `${BASE_URL}/` } } } }, 'Partite.cc'));
+        if (hasAudio) streams.push(formatStream({ name: `Server ${server}`, title: movie ? mediaTitle : `${mediaTitle} ${siteSeason}x${siteEpisode}`, quality, language: hasItalianAudio ? 'Italian' : '', type: 'hls', url, behaviorHints: { notWebReady: false, proxyHeaders: { request: { Referer: `${BASE_URL}/` } } } }, 'Partite.cc'));
       }
     } catch (_) {}
   }
