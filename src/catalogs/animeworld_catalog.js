@@ -418,4 +418,155 @@ async function getFilmAnimeItaliani() {
   return getCachedItems('aw-film-ita', parseFilterItems);
 }
 
-module.exports = { getLatestEpisodes, getTodaySchedule, getAnimeItaliani, getFilmAnimeItaliani };
+// ── TMDB Seasonal Top Anime ──────────────────────────────────────────────────
+const TMDB_SEASON_CACHE_TTL_MS = 6 * 60 * 60 * 1000;
+async function getTopAnimeStagionali() {
+  const cacheKey = 'tmdb:seasonal-top';
+  const cached = pageCaches.get(cacheKey);
+  if (cached && cached.items && Date.now() - cached.at < TMDB_SEASON_CACHE_TTL_MS) {
+    return cached.items;
+  }
+
+  const now = new Date();
+  const year = now.getFullYear();
+  const month = now.getMonth() + 1;
+  let season;
+  if (month <= 3) season = 'winter';
+  else if (month <= 6) season = 'spring';
+  else if (month <= 9) season = 'summer';
+  else season = 'fall';
+
+  try {
+    const url = `https://api.themoviedb.org/3/discover/tv?api_key=${TMDB_API_KEY}&with_genres=16&sort_by=popularity.desc&first_air_date_year=${year}&language=it-IT&page=1`;
+    const data = await fetchJson(url);
+    const results = (data.results || []).slice(0, 20);
+
+    const items = results.map((r) => ({
+      tmdbId: r.id,
+      title: r.name || r.original_name,
+      poster: r.poster_path ? `https://image.tmdb.org/t/p/w500${r.poster_path}` : null,
+      backdrop: r.backdrop_path ? `https://image.tmdb.org/t/p/w780${r.backdrop_path}` : null,
+      description: r.overview || '',
+      rating: r.vote_average || 0,
+      year: r.first_air_date ? r.first_air_date.slice(0, 4) : '',
+      season
+    }));
+
+    pageCaches.set(cacheKey, { at: Date.now(), items });
+    return items;
+  } catch (e) {
+    console.error('[Catalog] TMDB seasonal error:', e.message);
+    return cached?.items || [];
+  }
+}
+
+// ── AnimeWorld Genre Catalog ─────────────────────────────────────────────────
+const GENRE_MAP = {
+  'action': 1, 'avventura': 2, 'commedia': 4, 'drammatico': 7,
+  'fantasy': 14, 'horror': 15, 'romantico': 22, 'sci-fi': 24, 'thriller': 27
+};
+const GENRE_CACHE_TTL_MS = 30 * 60 * 1000;
+
+async function getAnimeByGenre(genreKey) {
+  const genreId = GENRE_MAP[genreKey];
+  if (!genreId) return [];
+
+  const cacheKey = `aw-genre:${genreKey}`;
+  const cached = pageCaches.get(cacheKey);
+  if (cached && cached.items && Date.now() - cached.at < GENRE_CACHE_TTL_MS) {
+    return cached.items;
+  }
+
+  try {
+    const path = `/filter?genre=${genreId}&sort=0`;
+    const html = await fetchPage(`${ANIMEWORLD_BASE_URL}${path}`, cacheKey);
+    const items = parseFilterItems(html);
+
+    const enriched = await mapLimit(items.slice(0, 50), 10, async (item) => ({
+      ...item,
+      tmdb: await resolveTmdbForTitle(item.title, 'tv')
+    }));
+
+    const filtered = enriched.filter(Boolean);
+    pageCaches.set(cacheKey, { at: Date.now(), items: filtered.length ? filtered : (cached?.items || []) });
+    return filtered.length ? filtered : (cached?.items || []);
+  } catch (e) {
+    console.error(`[Catalog] Genre ${genreKey} error:`, e.message);
+    return cached?.items || [];
+  }
+}
+
+// ── Weekly Schedule (full week) ──────────────────────────────────────────────
+const WEEK_CACHE_TTL_MS = 30 * 60 * 1000;
+async function getWeeklySchedule() {
+  const cacheKey = 'aw:weekly-schedule';
+  const cached = pageCaches.get(cacheKey);
+  if (cached && cached.items && Date.now() - cached.at < WEEK_CACHE_TTL_MS) {
+    return cached.items;
+  }
+
+  try {
+    const html = await fetchAnimeworldSchedule();
+    const dayNames = ['DOMENICA', 'LUNEDI', 'MARTEDI', 'MERCOLEDI', 'GIOVEDI', 'VENERDI', 'SABATO'];
+    const segments = html.split(/<span class="day-header">/).slice(1);
+
+    const allItems = [];
+    const seen = new Set();
+
+    for (let dayIdx = 0; dayIdx < dayNames.length; dayIdx++) {
+      let segment = null;
+      for (const seg of segments) {
+        const endIdx = seg.indexOf('</span>');
+        const rawDay = seg.slice(0, endIdx === -1 ? 40 : endIdx);
+        if (normalizeText(rawDay).toUpperCase() === dayNames[dayIdx]) {
+          segment = seg;
+          break;
+        }
+      }
+      if (!segment) continue;
+
+      for (const block of segment.split('<div class="widget boxcalendario').slice(1)) {
+        const linkMatch = block.match(/<a\s+href="(\/play\/[^"]+)"\s+title="([^"]+)"/);
+        const epMatch = block.match(/episodio-calendario[^"]*">\s*(?:Episodio|Ep\.?)\s*(\d+)/i);
+        if (!linkMatch || !epMatch) continue;
+
+        const posterMatch = block.match(/background:\s*url\(([^)]+)\)/);
+        const hourMatch = block.match(/class="hour">\s*([^<]*)</);
+        const timeMatch = hourMatch ? hourMatch[1].match(/(\d{1,2}:\d{2})/) : null;
+        const episode = Number.parseInt(epMatch[1], 10);
+        if (!Number.isInteger(episode)) continue;
+
+        const key = `${normalizeText(decodeHtmlEntities(linkMatch[2]))}:${dayIdx}`;
+        if (seen.has(key)) continue;
+        seen.add(key);
+
+        allItems.push({
+          title: decodeHtmlEntities(linkMatch[2]),
+          episode,
+          day: dayNames[dayIdx],
+          dayIndex: dayIdx,
+          time: timeMatch ? timeMatch[1] : null,
+          url: `${ANIMEWORLD_BASE_URL}${linkMatch[1]}`,
+          poster: posterMatch ? posterMatch[1].replace(/['"]/g, '') : null
+        });
+      }
+    }
+
+    pageCaches.set(cacheKey, { at: Date.now(), items: allItems });
+    return allItems;
+  } catch (e) {
+    console.error('[Catalog] Weekly schedule error:', e.message);
+    return cached?.items || [];
+  }
+}
+
+module.exports = {
+  getLatestEpisodes,
+  getTodaySchedule,
+  getAnimeItaliani,
+  getFilmAnimeItaliani,
+  getTopAnimeStagionali,
+  getAnimeByGenre,
+  getWeeklySchedule,
+  GENRE_MAP
+};
