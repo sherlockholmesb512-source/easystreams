@@ -6,10 +6,49 @@ const PAGE_TTL_MS = 10 * 60 * 1000;
 const TMDB_SUCCESS_TTL_MS = 24 * 60 * 60 * 1000;
 const TMDB_FAILURE_TTL_MS = 60 * 60 * 1000;
 const FETCH_TIMEOUT_MS = 15 * 1000;
+const MAX_PAGE_CACHE_ENTRIES = 200;
+const MAX_TMDB_CACHE_ENTRIES = 500;
 
 const pageCaches = new Map();
 const tmdbCache = new Map();
 const tmdbPending = new Map();
+
+function evictExpired(map, defaultTtl) {
+  const now = Date.now();
+  for (const [key, value] of map) {
+    const ttl = value?.ttl || defaultTtl;
+    if (now - (value?.at || 0) > ttl) {
+      map.delete(key);
+    }
+  }
+}
+
+function enforceMaxSize(map, maxSize) {
+  if (map.size <= maxSize) return;
+  const keysToDelete = [];
+  let count = 0;
+  for (const key of map.keys()) {
+    if (map.size - count <= maxSize) break;
+    keysToDelete.push(key);
+    count++;
+  }
+  keysToDelete.forEach(k => map.delete(k));
+}
+
+function runCacheCleanup() {
+  const beforePages = pageCaches.size;
+  const beforeTmdb = tmdbCache.size;
+  evictExpired(pageCaches, PAGE_TTL_MS);
+  evictExpired(tmdbCache, TMDB_SUCCESS_TTL_MS);
+  tmdbPending.clear();
+  enforceMaxSize(pageCaches, MAX_PAGE_CACHE_ENTRIES);
+  enforceMaxSize(tmdbCache, MAX_TMDB_CACHE_ENTRIES);
+  const mem = process.memoryUsage();
+  const heapMB = Math.round(mem.heapUsed / 1024 / 1024);
+  console.log(`[Cache] cleanup: pages ${beforePages}→${pageCaches.size}, tmdb ${beforeTmdb}→${tmdbCache.size}, heap ${heapMB}MB`);
+}
+
+setInterval(runCacheCleanup, 5 * 60 * 1000);
 
 function normalizeText(value) {
   return String(value || '')
@@ -398,7 +437,6 @@ async function getCachedItems(kind, parser) {
   }));
 
   pageCaches.set(`${kind}:items`, { at: now, items: enriched.length ? enriched : (previous && previous.items) || [] });
-  pageCaches.set(`${kind}:items:stale`, { at: now, items: enriched.length ? enriched : (previous && previous.items) || [] });
   return enriched.length ? enriched : (previous && previous.items) || [];
 }
 
