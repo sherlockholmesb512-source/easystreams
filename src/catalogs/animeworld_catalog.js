@@ -553,7 +553,15 @@ async function getWeeklySchedule() {
     }
 
     pageCaches.set(cacheKey, { at: Date.now(), items: allItems });
-    return allItems;
+
+    const enriched = await mapLimit(allItems, 10, async (item) => ({
+      ...item,
+      tmdb: await resolveTmdbForTitle(item.title, 'tv')
+    }));
+
+    const result = enriched.filter(Boolean);
+    pageCaches.set(cacheKey, { at: Date.now(), items: result.length ? result : allItems });
+    return result.length ? result : allItems;
   } catch (e) {
     console.error('[Catalog] Weekly schedule error:', e.message);
     return cached?.items || [];
