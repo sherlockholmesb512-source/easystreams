@@ -2182,6 +2182,16 @@ builder.defineStreamHandler(async ({ type, id, config = {} }) => {
         const providerBenchmarkResults = [];
         const providersStartedAt = Date.now();
         const animeRoutingFlag = await animeRoutingFlagPromise;
+
+        let tmdbSeasonCounts = null;
+        if (requestContext?.tmdbId && type !== 'movie') {
+            try {
+                tmdbSeasonCounts = await getTmdbSeasonEpisodeCounts(requestContext.tmdbId);
+            } catch {
+                tmdbSeasonCounts = null;
+            }
+        }
+
         const requestStreamTimeout =
             animeRoutingFlag === true
                 ? Math.max(STREAM_RESPONSE_TIMEOUT, ANIME_STREAM_RESPONSE_TIMEOUT)
@@ -2237,6 +2247,7 @@ builder.defineStreamHandler(async ({ type, id, config = {} }) => {
                         providerContext.proxyEntries = easyProxyEntries;
                         providerContext.proxyMode = easyProxyMode;
                         providerContext.proxyPassword = easyProxyPassword;
+                        providerContext.tmdbSeasonCounts = tmdbSeasonCounts;
                         const streams = await provider.getStreams(providerId, providerType, effectiveSeason, episode, providerContext);
                         logVerbose(`[${name}] Found ${streams.length} streams`);
                         return streams;
@@ -2477,10 +2488,11 @@ builder.defineStreamHandler(async ({ type, id, config = {} }) => {
                             }
                         }
 
+                        const bingeLangToken = resolvedLangFlag || (s.language || '');
                         const finalBehaviorHints = {
                             ...(s.behaviorHints || {}),
                             notWebReady: proxiedByEasyProxy ? false : s?.behaviorHints?.notWebReady === true,
-                            bingeGroup: name // Consistent grouping by provider name
+                            bingeGroup: bingeLangToken ? `${name}-${bingeLangToken}` : name
                         };
 
                         if (aiostreamsMode && resolutionForFilename) {
