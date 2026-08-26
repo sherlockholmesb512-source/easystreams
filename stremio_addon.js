@@ -1742,26 +1742,19 @@ const builder = new addonBuilder({
     name: 'Easy Streams',
     description: 'Italian Streams providers',
     catalogs: [
-        {
-            id: 'aw-latest',
-            name: 'Ultimi Episodi',
-            type: 'series'
-        },
-        {
-            id: 'aw-schedule',
-            name: 'Calendario Uscite',
-            type: 'series'
-        },
-        {
-            id: 'aw-anime-ita',
-            name: 'Anime Italiani',
-            type: 'series'
-        },
-        {
-            id: 'aw-film-ita',
-            name: 'Film Anime Italiani',
-            type: 'movie'
-        }
+        { id: 'aw-latest', name: 'Ultimi Episodi', type: 'series' },
+        { id: 'aw-schedule', name: 'Calendario Uscite', type: 'series' },
+        { id: 'aw-weekly', name: 'Calendario Settimanale', type: 'series' },
+        { id: 'aw-seasonal', name: 'Top Anime Stagionali', type: 'series' },
+        { id: 'aw-anime-ita', name: 'Anime Italiani', type: 'series' },
+        { id: 'aw-film-ita', name: 'Film Anime Italiani', type: 'movie' },
+        { id: 'aw-genre-action', name: 'Azione', type: 'series' },
+        { id: 'aw-genre-avventura', name: 'Avventura', type: 'series' },
+        { id: 'aw-genre-commedia', name: 'Commedia', type: 'series' },
+        { id: 'aw-genre-fantasy', name: 'Fantasy', type: 'series' },
+        { id: 'aw-genre-horror', name: 'Horror', type: 'series' },
+        { id: 'aw-genre-romantico', name: 'Romantico', type: 'series' },
+        { id: 'aw-genre-sci-fi', name: 'Sci-Fi', type: 'series' }
     ],
     resources: ['stream', 'catalog', 'meta', 'search'],
     types: ['movie', 'series', 'anime'],
@@ -2870,8 +2863,17 @@ function formatCatalogDescription(item) {
 const CATALOG_SOURCES = {
     'aw-latest': { fetch: () => animeworldCatalog.getLatestEpisodes(), metaType: 'series', withEpisode: true },
     'aw-schedule': { fetch: () => animeworldCatalog.getTodaySchedule(), metaType: 'series', withEpisode: true },
+    'aw-weekly': { fetch: () => animeworldCatalog.getWeeklySchedule(), metaType: 'series', withEpisode: true, groupByDay: true },
+    'aw-seasonal': { fetch: () => animeworldCatalog.getTopAnimeStagionali(), metaType: 'series', withEpisode: false, isTmdbDirect: true },
     'aw-anime-ita': { fetch: () => animeworldCatalog.getAnimeItaliani(), metaType: 'series', withEpisode: false },
-    'aw-film-ita': { fetch: () => animeworldCatalog.getFilmAnimeItaliani(), metaType: 'movie', withEpisode: false }
+    'aw-film-ita': { fetch: () => animeworldCatalog.getFilmAnimeItaliani(), metaType: 'movie', withEpisode: false },
+    'aw-genre-action': { fetch: () => animeworldCatalog.getAnimeByGenre('action'), metaType: 'series', withEpisode: false },
+    'aw-genre-avventura': { fetch: () => animeworldCatalog.getAnimeByGenre('avventura'), metaType: 'series', withEpisode: false },
+    'aw-genre-commedia': { fetch: () => animeworldCatalog.getAnimeByGenre('commedia'), metaType: 'series', withEpisode: false },
+    'aw-genre-fantasy': { fetch: () => animeworldCatalog.getAnimeByGenre('fantasy'), metaType: 'series', withEpisode: false },
+    'aw-genre-horror': { fetch: () => animeworldCatalog.getAnimeByGenre('horror'), metaType: 'series', withEpisode: false },
+    'aw-genre-romantico': { fetch: () => animeworldCatalog.getAnimeByGenre('romantico'), metaType: 'series', withEpisode: false },
+    'aw-genre-sci-fi': { fetch: () => animeworldCatalog.getAnimeByGenre('sci-fi'), metaType: 'series', withEpisode: false }
 };
 
 async function buildCatalogMetas(kind) {
@@ -2882,9 +2884,36 @@ async function buildCatalogMetas(kind) {
 
         const metas = [];
         for (const item of Array.isArray(items) ? items : []) {
-            if (!item || !item.tmdb || !item.tmdb.tmdbId) continue;
+            if (!item) continue;
+
+            if (source.isTmdbDirect) {
+                if (!item.tmdbId) continue;
+                let releaseInfo = item.year || '';
+                const meta = {
+                    id: `tmdb:${item.tmdbId}`,
+                    type: source.metaType,
+                    name: item.title || '',
+                    poster: item.poster || null,
+                    background: item.backdrop || null,
+                    description: item.description || '',
+                    releaseInfo,
+                    genres: ['Anime'],
+                    behaviorHints: { defaultVideoId: null }
+                };
+                if (item.season) meta.description = `${item.description || ''}\n\nStagione: ${item.season}`;
+                if (item.rating) meta.runtime = Math.round(item.rating * 10);
+                metas.push(meta);
+                continue;
+            }
+
+            if (!item.tmdb || !item.tmdb.tmdbId) continue;
             let releaseInfo = null;
-            if (kind === 'aw-schedule') {
+            let name = source.withEpisode ? `${item.title} - Ep ${item.episode}` : item.title;
+
+            if (source.groupByDay && item.day) {
+                name = `${item.day} ${item.time || ''} - ${item.title} Ep ${item.episode}`;
+                releaseInfo = item.day;
+            } else if (kind === 'aw-schedule') {
                 const totalLabel = Number.isInteger(item.tmdb.totalEpisodes)
                     ? `${item.tmdb.totalEpisodes}`
                     : '?';
@@ -2892,10 +2921,11 @@ async function buildCatalogMetas(kind) {
             } else if (Number.isInteger(item.tmdb.totalEpisodes)) {
                 releaseInfo = `${item.tmdb.totalEpisodes} ep`;
             }
+
             metas.push({
                 id: `tmdb:${item.tmdb.tmdbId}`,
                 type: source.metaType,
-                name: source.withEpisode ? `${item.title} � Ep ${item.episode}` : item.title,
+                name,
                 poster: item.poster || null,
                 description: formatCatalogDescription(item),
                 releaseInfo,
@@ -3332,9 +3362,11 @@ const CATALOG_WARMUP_INTERVAL_MS = 25 * 60 * 1000;
 function warmupAnimeworldCatalogs() {
     Promise.all([
         animeworldCatalog.getAnimeItaliani(),
-        animeworldCatalog.getFilmAnimeItaliani()
-    ]).then(([anime, film]) => {
-        console.log(`[Catalog] warmup: ${Array.isArray(anime) ? anime.length : 0} anime ITA, ${Array.isArray(film) ? film.length : 0} film ITA`);
+        animeworldCatalog.getFilmAnimeItaliani(),
+        animeworldCatalog.getTopAnimeStagionali(),
+        animeworldCatalog.getWeeklySchedule()
+    ]).then(([anime, film, seasonal, weekly]) => {
+        console.log(`[Catalog] warmup: ${Array.isArray(anime) ? anime.length : 0} anime ITA, ${Array.isArray(film) ? film.length : 0} film ITA, ${Array.isArray(seasonal) ? seasonal.length : 0} seasonal, ${Array.isArray(weekly) ? weekly.length : 0} weekly`);
     }).catch((error) => {
         console.error('[Catalog] warmup failed:', error.message);
     });
