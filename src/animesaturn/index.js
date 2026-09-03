@@ -1243,9 +1243,9 @@ function toAbsoluteEpisodeFromSeasonCounts(seasonCounts, season, episode) {
   return absolute;
 }
 
-function resolveEpisodeFromMappingPayload(mappingPayload, fallbackEpisode, season = null, seasonCounts = null, isLongSeries = false) {
+function resolveEpisodeFromMappingPayload(mappingPayload, fallbackEpisode, season = null, seasonCounts = null, isLongSeries = false, extra = {}) {
   const haveAbsolute = Number.parseInt(String(mappingPayload?.mappings?.tmdb_episode?.absoluteEpisode || ''), 10) > 0;
-  const useAbsolute = isLongSeries === true && haveAbsolute;
+  const useAbsolute = (isLongSeries === true || extra?.forceAbsolute === true) && haveAbsolute;
 
   if (useAbsolute) {
     const absoluteFromApi = parsePositiveInt(mappingPayload?.mappings?.tmdb_episode?.absoluteEpisode);
@@ -1274,6 +1274,10 @@ function resolveEpisodeFromMappingPayload(mappingPayload, fallbackEpisode, seaso
   if (fromTmdbRaw) return fromTmdbRaw;
 
   return normalizeRequestedEpisode(fallbackEpisode);
+}
+
+function absoluteEpisodeFromPayload(mappingPayload) {
+  return parsePositiveInt(mappingPayload?.mappings?.tmdb_episode?.absoluteEpisode);
 }
 
 async function getStreams(id, type, season, episode, providerContext = null) {
@@ -1313,11 +1317,37 @@ async function getStreams(id, type, season, episode, providerContext = null) {
     const normalizedType = String(type || "").toLowerCase();
     const mediaType = normalizedType === "movie" ? "movie" : "tv";
 
-    const perPathStreams = await mapLimit(animePaths, 3, (path) =>
-      extractStreamsFromAnimePath(path, requestedEpisode, mediaType, originalRequestedEpisode)
-    );
+    const extractFromPaths = async (episodeOverride = null) => {
+      const ep = episodeOverride || requestedEpisode;
+      const perPathStreams = await mapLimit(animePaths, 3, (path) =>
+        extractStreamsFromAnimePath(path, ep, mediaType, originalRequestedEpisode)
+      );
+      return perPathStreams.flat().filter((stream) => stream && stream.url);
+    };
 
-    const streams = perPathStreams.flat().filter((stream) => stream && stream.url);
+    let streams = await extractFromPaths();
+
+    const absoluteEpisode = absoluteEpisodeFromPayload(mappingPayload);
+    const absoluteIsReadable = Number.isInteger(requestedEpisode) && Number.isInteger(absoluteEpisode) && absoluteEpisode > 0;
+    const payloadHasAbsoluteOnly =
+      absoluteIsReadable &&
+      !parsePositiveInt(
+        mappingPayload?.mappings?.tmdb_episode?.episode ||
+        mappingPayload?.tmdb_episode?.episode
+      );
+    const longSeriesNeedsAbsoluteFallback =
+      (providerContext?.longSeries === true || payloadHasAbsoluteOnly) &&
+      streams.length === 0 &&
+      absoluteEpisode !== requestedEpisode;
+
+    if (longSeriesNeedsAbsoluteFallback) {
+      const absoluteStreams = await extractFromPaths(absoluteEpisode);
+      if (absoluteStreams.length > 0) {
+        console.log(`[AnimeSaturn] absolute-episode fallback ${requestedEpisode}->${absoluteEpisode} (${absoluteStreams.length} streams)`);
+        streams = absoluteStreams;
+      }
+    }
+
     const deduped = [];
     const seen = new Set();
     for (const stream of streams) {

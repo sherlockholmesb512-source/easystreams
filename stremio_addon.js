@@ -775,7 +775,7 @@ async function shouldFailoverEasyProxy(proxyEntry) {
     const proxyUrl = proxyEntry?.url;
     if (!proxyUrl) return false;
 
-    // Se l'URL non � HTTPS, lo consideriamo potenzialmente locale (localhost, IP privati, ecc.)
+    // Se l'URL non è HTTPS, lo consideriamo potenzialmente locale (localhost, IP privati, ecc.)
     // In questi casi non vogliamo scartare il proxy anche se sembra lento o offline.
     if (!proxyUrl.toLowerCase().startsWith('https:')) {
         return false;
@@ -2857,7 +2857,7 @@ function formatCatalogDescription(item) {
     if (Number.isInteger(item.tmdb && item.tmdb.totalEpisodes)) {
         parts.push(`${item.tmdb.totalEpisodes} episodi totali`);
     }
-    return parts.join(' � ');
+    return parts.join(' · ');
 }
 
 const CATALOG_SOURCES = {
@@ -2971,10 +2971,10 @@ async function applyTmdbLatinFallback(name, description, endpoint, tmdbId) {
                 const originalName = english.original_title || english.original_name || null;
                 if (englishName && hasLatinLetters(englishName)) {
                     outName = originalName && originalName !== englishName && hasLatinLetters(originalName)
-                        ? `${englishName} � ${originalName}`
-                        : `${englishName} � ${name}`;
+                        ? `${englishName} – ${originalName}`
+                        : `${englishName} – ${name}`;
                 } else if (originalName && hasLatinLetters(originalName)) {
-                    outName = `${originalName} � ${name}`;
+                    outName = `${originalName} – ${name}`;
                 }
             }
             if (!outDescription && english.overview) outDescription = english.overview;
@@ -3562,7 +3562,7 @@ async function warmupGuardoserie(force = false) {
 let server;
 (async () => {
     try {
-        // Esegui il warmup iniziale (salta se c'� gi� una sessione valida su disco)
+        // Esegui il warmup iniziale (salta se c'è già una sessione valida su disco)
         warmupGuardoserie().catch(e => {
             console.error('[Warmup] Errore critico Guardoserie:', e);
         });

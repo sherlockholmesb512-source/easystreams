@@ -1344,10 +1344,10 @@ function extractTmdbIdFromMappingPayload(mappingPayload) {
   const text = String(candidate || "").trim();
   return /^\d+$/.test(text) ? text : null;
 }
-function resolveEpisodeFromMappingPayload(mappingPayload, fallbackEpisode, season = null, seasonCounts = null, isLongSeries = false) {
+function resolveEpisodeFromMappingPayload(mappingPayload, fallbackEpisode, season = null, seasonCounts = null, isLongSeries = false, extra = {}) {
   var _a, _b, _c, _d, _e, _f, _g, _h, _i, _j, _k, _l, _m, _n, _o, _p, _q;
   const haveAbsolute = Number.parseInt(String(((_b = (_a = mappingPayload == null ? void 0 : mappingPayload.mappings) == null ? void 0 : _a.tmdb_episode) == null ? void 0 : _b.absoluteEpisode) || ""), 10) > 0;
-  const useAbsolute = isLongSeries === true && haveAbsolute;
+  const useAbsolute = (isLongSeries === true || (extra == null ? void 0 : extra.forceAbsolute) === true) && haveAbsolute;
   if (useAbsolute) {
     const absoluteFromApi = parsePositiveInt((_d = (_c = mappingPayload == null ? void 0 : mappingPayload.mappings) == null ? void 0 : _c.tmdb_episode) == null ? void 0 : _d.absoluteEpisode);
     if (absoluteFromApi) return absoluteFromApi;
@@ -1366,9 +1366,13 @@ function resolveEpisodeFromMappingPayload(mappingPayload, fallbackEpisode, seaso
   if (fromTmdbRaw) return fromTmdbRaw;
   return normalizeRequestedEpisode(fallbackEpisode);
 }
+function absoluteEpisodeFromPayload(mappingPayload) {
+  var _a, _b;
+  return parsePositiveInt((_b = (_a = mappingPayload == null ? void 0 : mappingPayload.mappings) == null ? void 0 : _a.tmdb_episode) == null ? void 0 : _b.absoluteEpisode);
+}
 function getStreams(id, type, season, episode, providerContext = null) {
   return __async(this, null, function* () {
-    var _a;
+    var _a, _b, _c, _d;
     try {
       const lookup = resolveLookupRequest(id, season, episode, providerContext);
       if (!lookup) return [];
@@ -1398,16 +1402,33 @@ function getStreams(id, type, season, episode, providerContext = null) {
       const originalRequestedEpisode = normalizeRequestedEpisode(lookup.episode);
       const normalizedType = String(type || "").toLowerCase();
       const mediaType = normalizedType === "movie" ? "movie" : "tv";
-      const perPathStreams = yield mapLimit(
-        animePaths,
-        3,
-        (path) => extractStreamsFromAnimePath(path, requestedEpisode, mediaType, originalRequestedEpisode)
+      const extractFromPaths = (episodeOverride = null) => __async(null, null, function* () {
+        const ep = episodeOverride || requestedEpisode;
+        const perPathStreams = yield mapLimit(
+          animePaths,
+          3,
+          (path) => extractStreamsFromAnimePath(path, ep, mediaType, originalRequestedEpisode)
+        );
+        return perPathStreams.flat().filter((stream) => stream && stream.url);
+      });
+      let streams = yield extractFromPaths();
+      const absoluteEpisode = absoluteEpisodeFromPayload(mappingPayload);
+      const absoluteIsReadable = Number.isInteger(requestedEpisode) && Number.isInteger(absoluteEpisode) && absoluteEpisode > 0;
+      const payloadHasAbsoluteOnly = absoluteIsReadable && !parsePositiveInt(
+        ((_b = (_a = mappingPayload == null ? void 0 : mappingPayload.mappings) == null ? void 0 : _a.tmdb_episode) == null ? void 0 : _b.episode) || ((_c = mappingPayload == null ? void 0 : mappingPayload.tmdb_episode) == null ? void 0 : _c.episode)
       );
-      const streams = perPathStreams.flat().filter((stream) => stream && stream.url);
+      const longSeriesNeedsAbsoluteFallback = ((providerContext == null ? void 0 : providerContext.longSeries) === true || payloadHasAbsoluteOnly) && streams.length === 0 && absoluteEpisode !== requestedEpisode;
+      if (longSeriesNeedsAbsoluteFallback) {
+        const absoluteStreams = yield extractFromPaths(absoluteEpisode);
+        if (absoluteStreams.length > 0) {
+          console.log(`[AnimeSaturn] absolute-episode fallback ${requestedEpisode}->${absoluteEpisode} (${absoluteStreams.length} streams)`);
+          streams = absoluteStreams;
+        }
+      }
       const deduped = [];
       const seen = /* @__PURE__ */ new Set();
       for (const stream of streams) {
-        const isNotWebReady = (_a = stream.behaviorHints) == null ? void 0 : _a.notWebReady;
+        const isNotWebReady = (_d = stream.behaviorHints) == null ? void 0 : _d.notWebReady;
         const normalizedUrl = !isNotWebReady ? normalizePlayableMediaUrl(stream.url) : stream.url;
         if (!normalizedUrl || seen.has(normalizedUrl)) continue;
         seen.add(normalizedUrl);

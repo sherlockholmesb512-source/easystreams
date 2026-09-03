@@ -1130,10 +1130,10 @@ function extractTmdbIdFromMappingPayload(mappingPayload) {
   const text = String(candidate || "").trim();
   return /^\d+$/.test(text) ? text : null;
 }
-function resolveEpisodeFromMappingPayload(mappingPayload, fallbackEpisode, season = null, seasonCounts = null, isLongSeries = false) {
+function resolveEpisodeFromMappingPayload(mappingPayload, fallbackEpisode, season = null, seasonCounts = null, isLongSeries = false, extra = {}) {
   var _a, _b, _c, _d, _e, _f, _g, _h, _i, _j, _k, _l, _m;
   const haveAbsolute = Number.parseInt(String(((_b = (_a = mappingPayload == null ? void 0 : mappingPayload.mappings) == null ? void 0 : _a.tmdb_episode) == null ? void 0 : _b.absoluteEpisode) || ""), 10) > 0;
-  const useAbsolute = isLongSeries === true && haveAbsolute;
+  const useAbsolute = (isLongSeries === true || (extra == null ? void 0 : extra.forceAbsolute) === true) && haveAbsolute;
   if (useAbsolute) {
     const absoluteFromApi = parsePositiveInt((_d = (_c = mappingPayload == null ? void 0 : mappingPayload.mappings) == null ? void 0 : _c.tmdb_episode) == null ? void 0 : _d.absoluteEpisode);
     if (absoluteFromApi) return absoluteFromApi;
@@ -1151,6 +1151,10 @@ function resolveEpisodeFromMappingPayload(mappingPayload, fallbackEpisode, seaso
   );
   if (fromTmdbRaw) return fromTmdbRaw;
   return normalizeRequestedEpisode(fallbackEpisode);
+}
+function absoluteEpisodeFromPayload(mappingPayload) {
+  var _a, _b;
+  return parsePositiveInt((_b = (_a = mappingPayload == null ? void 0 : mappingPayload.mappings) == null ? void 0 : _a.tmdb_episode) == null ? void 0 : _b.absoluteEpisode);
 }
 function mapLimit(values, limit, mapper) {
   return __async(this, null, function* () {
@@ -1301,6 +1305,7 @@ function animePathsToBases(paths) {
 }
 function getStreams(id, type, season, episode, providerContext = null) {
   return __async(this, null, function* () {
+    var _a, _b, _c;
     try {
       const lookup = resolveLookupRequest(id, season, episode, providerContext);
       if (!lookup) return [];
@@ -1328,15 +1333,28 @@ function getStreams(id, type, season, episode, providerContext = null) {
       const requestedEpisode = resolveEpisodeFromMappingPayload(mappingPayload, lookup.episode, lookup.season, (providerContext == null ? void 0 : providerContext.tmdbSeasonCounts) || null, (providerContext == null ? void 0 : providerContext.longSeries) === true);
       const normalizedType = String(type || "").toLowerCase();
       const mediaType = normalizedType === "movie" ? "movie" : "tv";
-      const extractFromPaths = (paths) => __async(null, null, function* () {
+      const extractFromPaths = (paths, episodeOverride = null) => __async(null, null, function* () {
         const perPathStreams = yield mapLimit(
           paths,
           3,
-          (path) => extractStreamsFromAnimePath(path, requestedEpisode, mediaType)
+          (path) => extractStreamsFromAnimePath(path, episodeOverride || requestedEpisode, mediaType)
         );
         return perPathStreams.flat().filter((stream) => stream && stream.url);
       });
       let streams = animePaths.length > 0 ? yield extractFromPaths(animePaths) : [];
+      const absoluteEpisode = absoluteEpisodeFromPayload(mappingPayload);
+      const absoluteIsReadable = Number.isInteger(requestedEpisode) && Number.isInteger(absoluteEpisode) && absoluteEpisode > 0;
+      const payloadHasAbsoluteOnly = absoluteIsReadable && !parsePositiveInt(
+        ((_b = (_a = mappingPayload == null ? void 0 : mappingPayload.mappings) == null ? void 0 : _a.tmdb_episode) == null ? void 0 : _b.episode) || ((_c = mappingPayload == null ? void 0 : mappingPayload.tmdb_episode) == null ? void 0 : _c.episode)
+      );
+      const longSeriesNeedsAbsoluteFallback = ((providerContext == null ? void 0 : providerContext.longSeries) === true || payloadHasAbsoluteOnly) && streams.length === 0 && absoluteEpisode !== requestedEpisode;
+      if (longSeriesNeedsAbsoluteFallback) {
+        const absoluteStreams = yield extractFromPaths(animePaths, absoluteEpisode);
+        if (absoluteStreams.length > 0) {
+          console.log(`[AnimeWorld] absolute-episode fallback ${requestedEpisode}->${absoluteEpisode} (${absoluteStreams.length} streams)`);
+          streams = absoluteStreams;
+        }
+      }
       const requestedSeason = normalizeRequestedSeason(lookup && lookup.season);
       const mappedPathHasSeasonSuffix = (Array.isArray(animePaths) ? animePaths : []).some((p) => {
         const base = extractSlugBaseFromPath(p);
