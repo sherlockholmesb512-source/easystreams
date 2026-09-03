@@ -1193,24 +1193,28 @@ function toAbsoluteEpisodeFromSeasonCounts(seasonCounts, season, episode) {
   return absolute;
 }
 
-function resolveEpisodeFromMappingPayload(mappingPayload, fallbackEpisode, season = null, seasonCounts = null) {
+function resolveEpisodeFromMappingPayload(mappingPayload, fallbackEpisode, season = null, seasonCounts = null, isLongSeries = false) {
+  const haveAbsolute = Number.parseInt(String(mappingPayload?.mappings?.tmdb_episode?.absoluteEpisode || ''), 10) > 0;
+  const useAbsolute = isLongSeries === true && haveAbsolute;
+
+  if (useAbsolute) {
+    const absoluteFromApi = parsePositiveInt(mappingPayload?.mappings?.tmdb_episode?.absoluteEpisode);
+    if (absoluteFromApi) return absoluteFromApi;
+  }
+
   const fromTmdbRelative = parsePositiveInt(
     mappingPayload?.mappings?.tmdb_episode?.episode ||
     mappingPayload?.tmdb_episode?.episode
   );
 
   if (fromTmdbRelative) {
-    const tmdbSeason = Number.parseInt(
-      String(mappingPayload?.mappings?.tmdb_episode?.season || mappingPayload?.tmdb_episode?.season || ''),
-      10
-    );
-    if (Number.isInteger(tmdbSeason) && tmdbSeason > 0 && Array.isArray(seasonCounts) && seasonCounts.length > 0) {
-      const absolute = toAbsoluteEpisodeFromSeasonCounts(seasonCounts, tmdbSeason, fromTmdbRelative);
-      if (absolute !== null && absolute > 0) return absolute;
-    }
-
-    if (Number.isInteger(season) && season > 0 && Array.isArray(seasonCounts) && seasonCounts.length > 0) {
-      const absolute = toAbsoluteEpisodeFromSeasonCounts(seasonCounts, season, fromTmdbRelative);
+    if (isLongSeries === true && Array.isArray(seasonCounts) && seasonCounts.length > 0) {
+      const tmdbSeason = Number.parseInt(
+        String(mappingPayload?.mappings?.tmdb_episode?.season || mappingPayload?.tmdb_episode?.season || ''),
+        10
+      );
+      const effectiveSeason = Number.isInteger(tmdbSeason) && tmdbSeason > 0 ? tmdbSeason : season;
+      const absolute = toAbsoluteEpisodeFromSeasonCounts(seasonCounts, effectiveSeason, fromTmdbRelative);
       if (absolute !== null && absolute > 0) return absolute;
     }
 
@@ -1424,7 +1428,7 @@ async function getStreams(id, type, season, episode, providerContext = null) {
 
     if (animePaths.length === 0) return [];
 
-    const requestedEpisode = resolveEpisodeFromMappingPayload(mappingPayload, lookup.episode, lookup.season, providerContext?.tmdbSeasonCounts || null);
+    const requestedEpisode = resolveEpisodeFromMappingPayload(mappingPayload, lookup.episode, lookup.season, providerContext?.tmdbSeasonCounts || null, providerContext?.longSeries === true);
     const perPathStreams = await mapLimit(animePaths, 3, (path) =>
       extractStreamsFromAnimePath(path, requestedEpisode)
     );

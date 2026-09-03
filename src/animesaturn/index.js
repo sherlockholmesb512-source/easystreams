@@ -1243,7 +1243,15 @@ function toAbsoluteEpisodeFromSeasonCounts(seasonCounts, season, episode) {
   return absolute;
 }
 
-function resolveEpisodeFromMappingPayload(mappingPayload, fallbackEpisode, season = null, seasonCounts = null) {
+function resolveEpisodeFromMappingPayload(mappingPayload, fallbackEpisode, season = null, seasonCounts = null, isLongSeries = false) {
+  const haveAbsolute = Number.parseInt(String(mappingPayload?.mappings?.tmdb_episode?.absoluteEpisode || ''), 10) > 0;
+  const useAbsolute = isLongSeries === true && haveAbsolute;
+
+  if (useAbsolute) {
+    const absoluteFromApi = parsePositiveInt(mappingPayload?.mappings?.tmdb_episode?.absoluteEpisode);
+    if (absoluteFromApi) return absoluteFromApi;
+  }
+
   const fromTmdbRelative = parsePositiveInt(
     mappingPayload?.mappings?.tmdb_episode?.episode ||
     mappingPayload?.tmdb_episode?.episode
@@ -1300,7 +1308,7 @@ async function getStreams(id, type, season, episode, providerContext = null) {
 
     if (animePaths.length === 0) return [];
 
-    const requestedEpisode = resolveEpisodeFromMappingPayload(mappingPayload, lookup.episode, lookup.season, providerContext?.tmdbSeasonCounts || null);
+    const requestedEpisode = resolveEpisodeFromMappingPayload(mappingPayload, lookup.episode, lookup.season, providerContext?.tmdbSeasonCounts || null, providerContext?.longSeries === true);
     const originalRequestedEpisode = normalizeRequestedEpisode(lookup.episode);
     const normalizedType = String(type || "").toLowerCase();
     const mediaType = normalizedType === "movie" ? "movie" : "tv";

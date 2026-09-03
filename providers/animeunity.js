@@ -8529,7 +8529,7 @@ function resolveLookupRequest(id, season, episode, providerContext = null) {
     return {
       provider: "kitsu",
       externalId: String(contextKitsu),
-      season: null,
+      season: requestedSeason,
       episode: requestedEpisode
     };
   }
@@ -8538,7 +8538,7 @@ function resolveLookupRequest(id, season, episode, providerContext = null) {
     return {
       provider: "mal",
       externalId: String(contextMal),
-      season: null,
+      season: requestedSeason,
       episode: requestedEpisode
     };
   }
@@ -8547,7 +8547,7 @@ function resolveLookupRequest(id, season, episode, providerContext = null) {
     return {
       provider: "anilist",
       externalId: String(contextAnilist),
-      season: null,
+      season: requestedSeason,
       episode: requestedEpisode
     };
   }
@@ -8556,7 +8556,7 @@ function resolveLookupRequest(id, season, episode, providerContext = null) {
     return {
       provider: "anidb",
       externalId: String(contextAnidb),
-      season: null,
+      season: requestedSeason,
       episode: requestedEpisode
     };
   }
@@ -8637,15 +8637,54 @@ function extractTmdbIdFromMappingPayload(mappingPayload) {
   const text = String(candidate || "").trim();
   return /^\d+$/.test(text) ? text : null;
 }
-function resolveEpisodeFromMappingPayload(mappingPayload, fallbackEpisode) {
-  var _a, _b, _c, _d, _e;
+function toAbsoluteEpisodeFromSeasonCounts(seasonCounts, season, episode) {
+  const parsedEpisode = Number.parseInt(String(episode || ""), 10);
+  if (!Number.isInteger(parsedEpisode) || parsedEpisode < 1) return null;
+  const parsedSeason = Number.parseInt(String(season || ""), 10);
+  if (!Number.isInteger(parsedSeason) || parsedSeason < 1) {
+    return parsedEpisode;
+  }
+  if (parsedSeason === 1) return parsedEpisode;
+  const seasons = Array.isArray(seasonCounts) ? seasonCounts : [];
+  const current = seasons.find((s) => s.season_number === parsedSeason);
+  if (current && parsedEpisode > current.episode_count) {
+    return parsedEpisode;
+  }
+  let absolute = parsedEpisode;
+  for (const s of seasons) {
+    if (!Number.isInteger(s == null ? void 0 : s.season_number) || !Number.isInteger(s == null ? void 0 : s.episode_count)) continue;
+    if (s.season_number < parsedSeason) {
+      absolute += s.episode_count;
+    }
+  }
+  return absolute;
+}
+function resolveEpisodeFromMappingPayload(mappingPayload, fallbackEpisode, season = null, seasonCounts = null, isLongSeries = false) {
+  var _a, _b, _c, _d, _e, _f, _g, _h, _i, _j, _k, _l;
+  const haveAbsolute = Number.parseInt(String(((_b = (_a = mappingPayload == null ? void 0 : mappingPayload.mappings) == null ? void 0 : _a.tmdb_episode) == null ? void 0 : _b.absoluteEpisode) || ""), 10) > 0;
+  const useAbsolute = isLongSeries === true && haveAbsolute;
+  if (useAbsolute) {
+    const absoluteFromApi = parsePositiveInt((_d = (_c = mappingPayload == null ? void 0 : mappingPayload.mappings) == null ? void 0 : _c.tmdb_episode) == null ? void 0 : _d.absoluteEpisode);
+    if (absoluteFromApi) return absoluteFromApi;
+  }
   const fromTmdbRelative = parsePositiveInt(
-    ((_b = (_a = mappingPayload == null ? void 0 : mappingPayload.mappings) == null ? void 0 : _a.tmdb_episode) == null ? void 0 : _b.episode) || ((_c = mappingPayload == null ? void 0 : mappingPayload.tmdb_episode) == null ? void 0 : _c.episode)
+    ((_f = (_e = mappingPayload == null ? void 0 : mappingPayload.mappings) == null ? void 0 : _e.tmdb_episode) == null ? void 0 : _f.episode) || ((_g = mappingPayload == null ? void 0 : mappingPayload.tmdb_episode) == null ? void 0 : _g.episode)
   );
-  if (fromTmdbRelative) return fromTmdbRelative;
-  const fromRequested = parsePositiveInt((_d = mappingPayload == null ? void 0 : mappingPayload.requested) == null ? void 0 : _d.episode);
+  if (fromTmdbRelative) {
+    if (isLongSeries === true && Array.isArray(seasonCounts) && seasonCounts.length > 0) {
+      const tmdbSeason = Number.parseInt(
+        String(((_i = (_h = mappingPayload == null ? void 0 : mappingPayload.mappings) == null ? void 0 : _h.tmdb_episode) == null ? void 0 : _i.season) || ((_j = mappingPayload == null ? void 0 : mappingPayload.tmdb_episode) == null ? void 0 : _j.season) || ""),
+        10
+      );
+      const effectiveSeason = Number.isInteger(tmdbSeason) && tmdbSeason > 0 ? tmdbSeason : season;
+      const absolute = toAbsoluteEpisodeFromSeasonCounts(seasonCounts, effectiveSeason, fromTmdbRelative);
+      if (absolute !== null && absolute > 0) return absolute;
+    }
+    return fromTmdbRelative;
+  }
+  const fromRequested = parsePositiveInt((_k = mappingPayload == null ? void 0 : mappingPayload.requested) == null ? void 0 : _k.episode);
   if (fromRequested) return fromRequested;
-  const fromKitsu = parsePositiveInt((_e = mappingPayload == null ? void 0 : mappingPayload.kitsu) == null ? void 0 : _e.episode);
+  const fromKitsu = parsePositiveInt((_l = mappingPayload == null ? void 0 : mappingPayload.kitsu) == null ? void 0 : _l.episode);
   if (fromKitsu) return fromKitsu;
   return normalizeRequestedEpisode(fallbackEpisode);
 }
@@ -8825,7 +8864,7 @@ function getStreams(id, type, season, episode, providerContext = null) {
         }
       }
       if (animePaths.length === 0) return [];
-      const requestedEpisode = resolveEpisodeFromMappingPayload(mappingPayload, lookup.episode);
+      const requestedEpisode = resolveEpisodeFromMappingPayload(mappingPayload, lookup.episode, lookup.season, (providerContext == null ? void 0 : providerContext.tmdbSeasonCounts) || null, (providerContext == null ? void 0 : providerContext.longSeries) === true);
       const perPathStreams = yield mapLimit(
         animePaths,
         3,

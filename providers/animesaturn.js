@@ -1236,7 +1236,7 @@ function resolveLookupRequest(id, season, episode, providerContext = null) {
     return {
       provider: "kitsu",
       externalId: String(contextKitsu),
-      season: null,
+      season: requestedSeason,
       episode: requestedEpisode
     };
   }
@@ -1245,7 +1245,7 @@ function resolveLookupRequest(id, season, episode, providerContext = null) {
     return {
       provider: "mal",
       externalId: String(contextMal),
-      season: null,
+      season: requestedSeason,
       episode: requestedEpisode
     };
   }
@@ -1254,7 +1254,7 @@ function resolveLookupRequest(id, season, episode, providerContext = null) {
     return {
       provider: "anilist",
       externalId: String(contextAnilist),
-      season: null,
+      season: requestedSeason,
       episode: requestedEpisode
     };
   }
@@ -1263,7 +1263,7 @@ function resolveLookupRequest(id, season, episode, providerContext = null) {
     return {
       provider: "anidb",
       externalId: String(contextAnidb),
-      season: null,
+      season: requestedSeason,
       episode: requestedEpisode
     };
   }
@@ -1344,18 +1344,24 @@ function extractTmdbIdFromMappingPayload(mappingPayload) {
   const text = String(candidate || "").trim();
   return /^\d+$/.test(text) ? text : null;
 }
-function resolveEpisodeFromMappingPayload(mappingPayload, fallbackEpisode) {
-  var _a, _b, _c, _d, _e, _f, _g, _h, _i, _j, _k, _l, _m;
+function resolveEpisodeFromMappingPayload(mappingPayload, fallbackEpisode, season = null, seasonCounts = null, isLongSeries = false) {
+  var _a, _b, _c, _d, _e, _f, _g, _h, _i, _j, _k, _l, _m, _n, _o, _p, _q;
+  const haveAbsolute = Number.parseInt(String(((_b = (_a = mappingPayload == null ? void 0 : mappingPayload.mappings) == null ? void 0 : _a.tmdb_episode) == null ? void 0 : _b.absoluteEpisode) || ""), 10) > 0;
+  const useAbsolute = isLongSeries === true && haveAbsolute;
+  if (useAbsolute) {
+    const absoluteFromApi = parsePositiveInt((_d = (_c = mappingPayload == null ? void 0 : mappingPayload.mappings) == null ? void 0 : _c.tmdb_episode) == null ? void 0 : _d.absoluteEpisode);
+    if (absoluteFromApi) return absoluteFromApi;
+  }
   const fromTmdbRelative = parsePositiveInt(
-    ((_b = (_a = mappingPayload == null ? void 0 : mappingPayload.mappings) == null ? void 0 : _a.tmdb_episode) == null ? void 0 : _b.episode) || ((_c = mappingPayload == null ? void 0 : mappingPayload.tmdb_episode) == null ? void 0 : _c.episode)
+    ((_f = (_e = mappingPayload == null ? void 0 : mappingPayload.mappings) == null ? void 0 : _e.tmdb_episode) == null ? void 0 : _f.episode) || ((_g = mappingPayload == null ? void 0 : mappingPayload.tmdb_episode) == null ? void 0 : _g.episode)
   );
   if (fromTmdbRelative) return fromTmdbRelative;
-  const fromRequested = parsePositiveInt((_d = mappingPayload == null ? void 0 : mappingPayload.requested) == null ? void 0 : _d.episode);
+  const fromRequested = parsePositiveInt((_h = mappingPayload == null ? void 0 : mappingPayload.requested) == null ? void 0 : _h.episode);
   if (fromRequested) return fromRequested;
-  const fromKitsu = parsePositiveInt((_e = mappingPayload == null ? void 0 : mappingPayload.kitsu) == null ? void 0 : _e.episode);
+  const fromKitsu = parsePositiveInt((_i = mappingPayload == null ? void 0 : mappingPayload.kitsu) == null ? void 0 : _i.episode);
   if (fromKitsu) return fromKitsu;
   const fromTmdbRaw = parsePositiveInt(
-    ((_g = (_f = mappingPayload == null ? void 0 : mappingPayload.mappings) == null ? void 0 : _f.tmdb_episode) == null ? void 0 : _g.rawEpisodeNumber) || ((_i = (_h = mappingPayload == null ? void 0 : mappingPayload.mappings) == null ? void 0 : _h.tmdb_episode) == null ? void 0 : _i.raw_episode_number) || ((_k = (_j = mappingPayload == null ? void 0 : mappingPayload.mappings) == null ? void 0 : _j.tmdbEpisode) == null ? void 0 : _k.rawEpisodeNumber) || ((_l = mappingPayload == null ? void 0 : mappingPayload.tmdb_episode) == null ? void 0 : _l.rawEpisodeNumber) || ((_m = mappingPayload == null ? void 0 : mappingPayload.tmdbEpisode) == null ? void 0 : _m.rawEpisodeNumber)
+    ((_k = (_j = mappingPayload == null ? void 0 : mappingPayload.mappings) == null ? void 0 : _j.tmdb_episode) == null ? void 0 : _k.rawEpisodeNumber) || ((_m = (_l = mappingPayload == null ? void 0 : mappingPayload.mappings) == null ? void 0 : _l.tmdb_episode) == null ? void 0 : _m.raw_episode_number) || ((_o = (_n = mappingPayload == null ? void 0 : mappingPayload.mappings) == null ? void 0 : _n.tmdbEpisode) == null ? void 0 : _o.rawEpisodeNumber) || ((_p = mappingPayload == null ? void 0 : mappingPayload.tmdb_episode) == null ? void 0 : _p.rawEpisodeNumber) || ((_q = mappingPayload == null ? void 0 : mappingPayload.tmdbEpisode) == null ? void 0 : _q.rawEpisodeNumber)
   );
   if (fromTmdbRaw) return fromTmdbRaw;
   return normalizeRequestedEpisode(fallbackEpisode);
@@ -1388,7 +1394,7 @@ function getStreams(id, type, season, episode, providerContext = null) {
         }
       }
       if (animePaths.length === 0) return [];
-      const requestedEpisode = resolveEpisodeFromMappingPayload(mappingPayload, lookup.episode);
+      const requestedEpisode = resolveEpisodeFromMappingPayload(mappingPayload, lookup.episode, lookup.season, (providerContext == null ? void 0 : providerContext.tmdbSeasonCounts) || null, (providerContext == null ? void 0 : providerContext.longSeries) === true);
       const originalRequestedEpisode = normalizeRequestedEpisode(lookup.episode);
       const normalizedType = String(type || "").toLowerCase();
       const mediaType = normalizedType === "movie" ? "movie" : "tv";

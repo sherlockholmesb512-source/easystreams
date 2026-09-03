@@ -1022,7 +1022,7 @@ function resolveLookupRequest(id, season, episode, providerContext = null) {
     return {
       provider: "kitsu",
       externalId: String(contextKitsu),
-      season: null,
+      season: requestedSeason,
       episode: requestedEpisode
     };
   }
@@ -1031,7 +1031,7 @@ function resolveLookupRequest(id, season, episode, providerContext = null) {
     return {
       provider: "mal",
       externalId: String(contextMal),
-      season: null,
+      season: requestedSeason,
       episode: requestedEpisode
     };
   }
@@ -1040,7 +1040,7 @@ function resolveLookupRequest(id, season, episode, providerContext = null) {
     return {
       provider: "anilist",
       externalId: String(contextAnilist),
-      season: null,
+      season: requestedSeason,
       episode: requestedEpisode
     };
   }
@@ -1049,7 +1049,7 @@ function resolveLookupRequest(id, season, episode, providerContext = null) {
     return {
       provider: "anidb",
       externalId: String(contextAnidb),
-      season: null,
+      season: requestedSeason,
       episode: requestedEpisode
     };
   }
@@ -1130,16 +1130,26 @@ function extractTmdbIdFromMappingPayload(mappingPayload) {
   const text = String(candidate || "").trim();
   return /^\d+$/.test(text) ? text : null;
 }
-function resolveEpisodeFromMappingPayload(mappingPayload, fallbackEpisode) {
-  var _a, _b, _c, _d, _e;
+function resolveEpisodeFromMappingPayload(mappingPayload, fallbackEpisode, season = null, seasonCounts = null, isLongSeries = false) {
+  var _a, _b, _c, _d, _e, _f, _g, _h, _i, _j, _k, _l, _m;
+  const haveAbsolute = Number.parseInt(String(((_b = (_a = mappingPayload == null ? void 0 : mappingPayload.mappings) == null ? void 0 : _a.tmdb_episode) == null ? void 0 : _b.absoluteEpisode) || ""), 10) > 0;
+  const useAbsolute = isLongSeries === true && haveAbsolute;
+  if (useAbsolute) {
+    const absoluteFromApi = parsePositiveInt((_d = (_c = mappingPayload == null ? void 0 : mappingPayload.mappings) == null ? void 0 : _c.tmdb_episode) == null ? void 0 : _d.absoluteEpisode);
+    if (absoluteFromApi) return absoluteFromApi;
+  }
   const fromTmdbRelative = parsePositiveInt(
-    ((_b = (_a = mappingPayload == null ? void 0 : mappingPayload.mappings) == null ? void 0 : _a.tmdb_episode) == null ? void 0 : _b.episode) || ((_c = mappingPayload == null ? void 0 : mappingPayload.tmdb_episode) == null ? void 0 : _c.episode)
+    ((_f = (_e = mappingPayload == null ? void 0 : mappingPayload.mappings) == null ? void 0 : _e.tmdb_episode) == null ? void 0 : _f.episode) || ((_g = mappingPayload == null ? void 0 : mappingPayload.tmdb_episode) == null ? void 0 : _g.episode)
   );
   if (fromTmdbRelative) return fromTmdbRelative;
-  const fromRequested = parsePositiveInt((_d = mappingPayload == null ? void 0 : mappingPayload.requested) == null ? void 0 : _d.episode);
+  const fromRequested = parsePositiveInt((_h = mappingPayload == null ? void 0 : mappingPayload.requested) == null ? void 0 : _h.episode);
   if (fromRequested) return fromRequested;
-  const fromKitsu = parsePositiveInt((_e = mappingPayload == null ? void 0 : mappingPayload.kitsu) == null ? void 0 : _e.episode);
+  const fromKitsu = parsePositiveInt((_i = mappingPayload == null ? void 0 : mappingPayload.kitsu) == null ? void 0 : _i.episode);
   if (fromKitsu) return fromKitsu;
+  const fromTmdbRaw = parsePositiveInt(
+    ((_k = (_j = mappingPayload == null ? void 0 : mappingPayload.mappings) == null ? void 0 : _j.tmdb_episode) == null ? void 0 : _k.rawEpisodeNumber) || ((_m = (_l = mappingPayload == null ? void 0 : mappingPayload.mappings) == null ? void 0 : _l.tmdb_episode) == null ? void 0 : _m.raw_episode_number)
+  );
+  if (fromTmdbRaw) return fromTmdbRaw;
   return normalizeRequestedEpisode(fallbackEpisode);
 }
 function mapLimit(values, limit, mapper) {
@@ -1270,9 +1280,14 @@ function findAnimeworldFallbackPaths(lookup, providerContext, mappingPayload) {
         }
       }
       const seasonSuffix = slugBase.match(/-(\d+)$/);
-      if (seasonSuffix) {
-        if (requestedSeason === Number.parseInt(seasonSuffix[1], 10)) score += 3;
-      } else if (requestedSeason === 1 || requestedSeason === null) {
+      const suffixSeason = seasonSuffix ? Number.parseInt(seasonSuffix[1], 10) : null;
+      if (suffixSeason && requestedSeason === suffixSeason) {
+        score += 10;
+      } else if (suffixSeason && requestedSeason && requestedSeason > 1 && suffixSeason !== requestedSeason) {
+        score -= 5;
+      } else if (!suffixSeason && requestedSeason && requestedSeason > 1) {
+        score -= 3;
+      } else if (!suffixSeason && (requestedSeason === 1 || requestedSeason === null)) {
         score += 1;
       }
       scored.push({ path, score });
@@ -1310,7 +1325,7 @@ function getStreams(id, type, season, episode, providerContext = null) {
           }
         }
       }
-      const requestedEpisode = resolveEpisodeFromMappingPayload(mappingPayload, lookup.episode);
+      const requestedEpisode = resolveEpisodeFromMappingPayload(mappingPayload, lookup.episode, lookup.season, (providerContext == null ? void 0 : providerContext.tmdbSeasonCounts) || null, (providerContext == null ? void 0 : providerContext.longSeries) === true);
       const normalizedType = String(type || "").toLowerCase();
       const mediaType = normalizedType === "movie" ? "movie" : "tv";
       const extractFromPaths = (paths) => __async(null, null, function* () {
@@ -1322,12 +1337,19 @@ function getStreams(id, type, season, episode, providerContext = null) {
         return perPathStreams.flat().filter((stream) => stream && stream.url);
       });
       let streams = animePaths.length > 0 ? yield extractFromPaths(animePaths) : [];
-      if (streams.length === 0) {
+      const requestedSeason = normalizeRequestedSeason(lookup && lookup.season);
+      const mappedPathHasSeasonSuffix = (Array.isArray(animePaths) ? animePaths : []).some((p) => {
+        const base = extractSlugBaseFromPath(p);
+        return base && /-\d+$/.test(base);
+      });
+      const needsFallbackForSeason = requestedSeason && requestedSeason > 1 && !mappedPathHasSeasonSuffix && streams.length > 0;
+      if (streams.length === 0 || needsFallbackForSeason) {
         try {
           const fallbackPaths = yield findAnimeworldFallbackPaths(lookup, providerContext, mappingPayload);
           if (fallbackPaths.length > 0) {
             console.log(`[AnimeWorld] site-search fallback: ${fallbackPaths.length} candidati`);
-            streams = yield extractFromPaths(fallbackPaths.slice(0, 5));
+            const fallbackStreams = yield extractFromPaths(fallbackPaths.slice(0, 5));
+            if (fallbackStreams.length > 0) streams = fallbackStreams;
           }
         } catch (error) {
           console.error("[AnimeWorld] site-search fallback failed:", error.message);
