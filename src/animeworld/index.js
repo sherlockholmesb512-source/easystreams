@@ -1024,11 +1024,6 @@ function toAbsoluteEpisodeFromSeasonCounts(seasonCounts, season, episode) {
 }
 
 function resolveEpisodeFromMappingPayload(mappingPayload, fallbackEpisode, season = null, seasonCounts = null) {
-  const absoluteFromApi = parsePositiveInt(
-    mappingPayload?.mappings?.tmdb_episode?.absoluteEpisode
-  );
-  if (absoluteFromApi) return absoluteFromApi;
-
   const fromTmdbRelative = parsePositiveInt(
     mappingPayload?.mappings?.tmdb_episode?.episode ||
     mappingPayload?.tmdb_episode?.episode
